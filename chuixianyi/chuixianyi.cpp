@@ -27,6 +27,8 @@ void chuixianyi::on_startCameraBtn_clicked()
 	startCamera();
 	flagStartCamera = true;
 	flagEndCamera = false;
+	ui.textBrowser->append(QString::fromLocal8Bit("已打开摄像头!"));
+	QCoreApplication::processEvents();
 }
 
 void chuixianyi::on_endCameraBtn_clicked()
@@ -35,6 +37,8 @@ void chuixianyi::on_endCameraBtn_clicked()
 	endCamera();
 	flagStartCamera = false;
 	flagEndCamera = true;
+	ui.textBrowser->append(QString::fromLocal8Bit("已关闭摄像头!"));
+	QCoreApplication::processEvents();
 }
 
 void chuixianyi::on_saveFrameBtn_clicked()
@@ -75,6 +79,9 @@ void chuixianyi::on_saveFrameBtn_clicked()
 
 
 	++num;
+
+	ui.textBrowser->append(QString::fromLocal8Bit("已保存当前帧画面!"));
+	QCoreApplication::processEvents();
 }
 
 
@@ -410,6 +417,7 @@ Mat chuixianyi::QImage2CvMat(const QImage &image)
 
 
 
+
 void chuixianyi::on_calibrateBtn_clicked()
 {
 	if (flagStartCamera && !flagEndCamera)
@@ -448,10 +456,6 @@ void chuixianyi::on_rectifyBtn_clicked()
 	}
 
 	readRectifyParams();
-	validRoi[0], validRoi[1] = stereoRectification(stereoRectifyParams, cameraMatrix_L, distCoeffs_L, cameraMatrix_R, distCoeffs_R,
-		imageSize, R, T, R1, R2, P1, P2, Q, mapl1, mapl2, mapr1, mapr2);
-	ui.textBrowser->append(QString::fromLocal8Bit("已创建图像重投影映射表!"));
-	QCoreApplication::processEvents();
 
 	QStringList file_name_list;
 	QStringList file_path_list;
@@ -525,7 +529,7 @@ void chuixianyi::on_rectifyBtn_clicked()
 			computeDisparityImage(imageName_L, imageName_R, img1_rectified, img2_rectified, mapl1, mapl2, mapr1, mapr2, validRoi, disparity);
 		}
 	}
-	ui.textBrowser->append(QString::fromLocal8Bit("视差图建立完成!"));
+	ui.textBrowser->append(QString::fromLocal8Bit("已完成左右图像校正!"));
 	QCoreApplication::processEvents();
 
 	// 从三维投影获得深度映射
@@ -550,30 +554,10 @@ void chuixianyi::on_measureBtn_clicked()
 			return;
 		}
 	}
-
 	flagIsMeasuring = true;
-	if (flagStartCamera && !flagEndCamera)
-	{
-		//摄像头画面静止
-		timer->stop();
-		Size size(IMAGE_WIDTH, IMAGE_HEIGHT);
 
-		PvImage *alInputImage = alBuffer->GetImage();
-		alInputImage->Alloc(IMAGE_WIDTH, IMAGE_HEIGHT, PvPixelMono8);
-		Mat lMat(size, CV_8UC1, alInputImage->GetDataPointer());
-		cvtColor(lMat, frameLeft, COLOR_RGB2BGR);
-
-		PvImage *blInputImage = blBuffer->GetImage();
-		blInputImage->Alloc(IMAGE_WIDTH, IMAGE_HEIGHT, PvPixelMono8);
-		Mat rMat(size, CV_8UC1, blInputImage->GetDataPointer());
-		cvtColor(rMat, frameRight, COLOR_RGB2BGR);
-	}
-
+	prepareFrameLR();
 	readRectifyParams();
-	validRoi[0], validRoi[1] = stereoRectification(stereoRectifyParams, cameraMatrix_L, distCoeffs_L, cameraMatrix_R, distCoeffs_R,
-		imageSize, R, T, R1, R2, P1, P2, Q, mapl1, mapl2, mapr1, mapr2);
-	ui.textBrowser->append(QString::fromLocal8Bit("已读取相机标定数据!"));
-	QCoreApplication::processEvents();
 
 	//这里就将校正后的frameLeft和frameRight显示在label上了
 	computeDisparityImage(frameLeft, frameRight, img1_rectified, img2_rectified, mapl1, mapl2, mapr1, mapr2, validRoi, disparity);
@@ -645,6 +629,680 @@ void chuixianyi::mousePressEvent(QMouseEvent *event)
 
 			labelPoints.clear();
 		}
+	}
+}
+
+void chuixianyi::on_autoMatchBtn_clicked()
+{
+	//测量按钮点击一次开始测量，再次点击就退出测量
+	if (flagStartCamera && !flagEndCamera)
+	{
+		if (flagIsMatched)
+		{
+			timer->start();
+			flagIsMatched = false;
+			return;
+		}
+	}
+	flagIsMatched = true;
+
+	prepareFrameLR();
+	readRectifyParams();
+
+	//这里就将校正后的frameLeft和frameRight显示在label上了
+	computeDisparityImage(frameLeft, frameRight, img1_rectified, img2_rectified, mapl1, mapl2, mapr1, mapr2, validRoi, disparity);
+	ui.textBrowser->append(QString::fromLocal8Bit("已将左右图像校正!"));
+
+	//-- 读取图像
+	Mat img1 = img1_rectified;
+	Mat img2 = img2_rectified;
+	//Mat img1 = imread(DATA_FOLDER + string("左相机校正图像.jpg"));
+	//Mat img2 = imread(DATA_FOLDER + string("右相机校正图像.jpg"));
+
+
+
+
+	//SURF算子	KNN特征匹配
+	vector<KeyPoint> keypoints_1, keypoints_2;
+	Mat descriptor_1, descriptor_2;
+	int minHessian = 400;
+	Ptr<Feature2D> surf = xfeatures2d::SURF::create(minHessian);
+
+	surf->detectAndCompute(img1, noArray(), keypoints_1, descriptor_1);
+	surf->detectAndCompute(img2, noArray(), keypoints_2, descriptor_2);
+	cout << keypoints_1.size() << " " << keypoints_2.size() << endl;
+	Mat outimg1;
+	drawKeypoints(img1, keypoints_1, outimg1, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
+	imwrite(DATA_FOLDER + string("SURF特征点.jpg"), outimg1);
+	ui.textBrowser->append(QString::fromLocal8Bit("已提取SURF特征点!"));
+	QCoreApplication::processEvents();
+
+	vector<DMatch> matches;
+	vector<vector<DMatch>> knn_matches;
+
+	BFMatcher matcher(NORM_L2);
+	matcher.knnMatch(descriptor_1, descriptor_2, knn_matches, 2);
+
+	for (size_t r = 0; r < knn_matches.size(); ++r)
+	{
+		if (knn_matches[r][0].distance > 0.8*knn_matches[r][1].distance) continue;
+		matches.push_back(knn_matches[r][0]);
+	}
+
+	Mat img_match;
+	Mat img_goodmatch;
+	drawMatches(img1, keypoints_1, img2, keypoints_2, matches, img_goodmatch);
+	imwrite(DATA_FOLDER + string("SURF_KNN特征匹配.jpg"), img_goodmatch);
+	ui.textBrowser->append(QString::fromLocal8Bit("已完成KNN特征匹配!"));
+	QCoreApplication::processEvents();
+
+
+	//https://blog.csdn.net/m0_37598482/article/details/78782252
+	//极线约束和RANSAC算法剔除误匹配
+	int ptCount = (int)matches.size();
+	Mat p1(ptCount, 2, CV_32F);
+	Mat p2(ptCount, 2, CV_32F);
+
+	// 把Keypoint转换为Mat  
+	Point2f pt;
+	for (int i = 0; i<ptCount; i++)
+	{
+		pt = keypoints_1[matches[i].queryIdx].pt;
+		p1.at<float>(i, 0) = pt.x;
+		p1.at<float>(i, 1) = pt.y;
+
+		pt = keypoints_2[matches[i].trainIdx].pt;
+		p2.at<float>(i, 0) = pt.x;
+		p2.at<float>(i, 1) = pt.y;
+	}
+	// 用RANSAC方法计算F  
+	// Mat m_Fundamental;  
+	// 上面这个变量是基本矩阵  
+	vector<uchar> m_RANSACStatus;
+	// 上面这个变量已经定义过，用于存储RANSAC后每个点的状态  
+	//m_Fundamental = findFundamentalMat(p1, p2, m_RANSACStatus, FM_RANSAC);  
+	Mat m_Fundamental = findFundamentalMat(p1, p2, m_RANSACStatus, FM_RANSAC);
+	cout << m_Fundamental << endl;
+	// 计算野点个数  
+	int OutlinerCount = 0;
+	for (int i = 0; i<ptCount; i++)
+	{
+		if (m_RANSACStatus[i] == 0) // 状态为0表示野点  
+		{
+			OutlinerCount++;
+		}
+	}
+
+	// 计算内点  
+	vector<Point2f> m_LeftInlier;
+	vector<Point2f> m_RightInlier;
+	vector<DMatch> m_InlierMatches;
+	// 上面三个变量用于保存内点和匹配关系  
+	int InlinerCount = ptCount - OutlinerCount;
+	m_InlierMatches.resize(InlinerCount);
+	m_LeftInlier.resize(InlinerCount);
+	m_RightInlier.resize(InlinerCount);
+	InlinerCount = 0;
+	for (int i = 0; i<ptCount; i++)
+	{
+		if (m_RANSACStatus[i] != 0)
+		{
+			m_LeftInlier[InlinerCount].x = p1.at<float>(i, 0);
+			m_LeftInlier[InlinerCount].y = p1.at<float>(i, 1);
+			m_RightInlier[InlinerCount].x = p2.at<float>(i, 0);
+			m_RightInlier[InlinerCount].y = p2.at<float>(i, 1);
+			m_InlierMatches[InlinerCount].queryIdx = InlinerCount;
+			m_InlierMatches[InlinerCount].trainIdx = InlinerCount;
+			InlinerCount++;
+		}
+	}
+
+	// 把内点转换为drawMatches可以使用的格式  
+	vector<KeyPoint> key1(InlinerCount);
+	vector<KeyPoint> key2(InlinerCount);
+	KeyPoint::convert(m_LeftInlier, key1);
+	KeyPoint::convert(m_RightInlier, key2);
+	//for (int i = 0; i<10; i++)
+	//	cout << key1[i].pt << " " << key2[i].pt << " " << key1[i].pt.x - key2[i].pt.x << endl;
+
+	Mat img_inliermatches;
+	drawMatches(img1, key1, img2, key2, m_InlierMatches, img_inliermatches);
+	imwrite(DATA_FOLDER + string("SURF_KNN_RANSAC特征匹配.jpg"), img_inliermatches);
+	ui.textBrowser->append(QString::fromLocal8Bit("已完成极线约束RANSAC剔除误匹配!"));
+	QCoreApplication::processEvents();
+
+
+
+	//读取KeyPoint中的对应关系	并计算对应点的空间坐标
+	int inlier_ptCount = (int)m_InlierMatches.size();
+	Mat p3(ptCount, 2, CV_32F);
+	Mat p4(ptCount, 2, CV_32F);
+	Point2f pt_l, pt_r;
+	Point3f real_pt;
+	fstream fs(DATA_FOLDER + string("匹配点的坐标.txt"), ios::out);
+	if (fs.is_open())
+	{
+		for (int i = 0; i < inlier_ptCount; ++i)
+		{
+			pt_l = key1[m_InlierMatches[i].queryIdx].pt;;
+			p3.at<float>(i, 0) = pt_l.x;
+			p3.at<float>(i, 1) = pt_l.y;
+
+			pt_r = key2[m_InlierMatches[i].trainIdx].pt;
+			p4.at<float>(i, 0) = pt_r.x;
+			p4.at<float>(i, 1) = pt_r.y;
+
+			real_pt = uv2xyz(pt_l, pt_r);
+			fs << real_pt.x << " " << real_pt.y << " " << real_pt.z << endl;
+		}
+	}
+	fs.close();
+	ui.textBrowser->append(QString::fromLocal8Bit("已写入匹配点的三维坐标!"));
+	QCoreApplication::processEvents();
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	//Mat test(img1.rows, img1.cols, CV_32FC1);
+	//float a = 0.0105591872, b = 0.1024243227, c = 10.106085341;
+	//for (int i = 0; i<test.rows; i++)
+	//{
+	//	float* pt = test.ptr<float>(i);
+	//	for (int j = 0; j<test.cols; j++)
+	//	{
+	//		float val = j*a + i*b + c;
+	//		pt[j] = val;
+	//	}
+	//}
+	////cout<<test<<endl;  
+	//cv::normalize(test, test, 0, 1, CV_MINMAX);
+	//cv::convertScaleAbs(test, test, 255);
+	//test.convertTo(test, CV_8UC1);
+	//imwrite(DATA_FOLDER + string("test.jpg"), test);
+
+
+
+
+
+
+
+
+
+
+
+	
+	
+	//ORB算子	BF特征匹配
+
+	////初始化
+	//vector<KeyPoint> keypoints_1, keypoints_2;   //关键点/角点
+	//											 /**
+	//											 opencv中keypoint类的默认构造函数为：
+	//											 CV_WRAP KeyPoint() : pt(0,0), size(0), angle(-1), response(0), octave(0), class_id(-1) {}
+	//											 pt(x,y):关键点的点坐标； // size():该关键点邻域直径大小； // angle:角度，表示关键点的方向，值为[0,360)，负值表示不使用。
+	//											 response:响应强度，选择响应最强的关键点;   octacv:从哪一层金字塔得到的此关键点。
+	//											 class_id:当要对图片进行分类时，用class_id对每个关键点进行区分，默认为-1。
+	//											 **/
+	//Mat descriptors_1, descriptors_2;      //描述子
+	//									   //创建ORB对象，参数为默认值
+	//Ptr<FeatureDetector> detector = ORB::create();
+	//Ptr<DescriptorExtractor> descriptor = ORB::create();
+	//Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("BruteForce-Hamming");
+	///**
+	//“Ptr<FeatureDetector> detector = ”等价于 “FeatureDetector * detector =”
+	//Ptr是OpenCV中使用的智能指针模板类，可以轻松管理各种类型的指针。
+	//特征检测器FeatureDetetor是虚类，通过定义FeatureDetector的对象可以使用多种特征检测及匹配方法，通过create()函数调用。
+	//描述子提取器DescriptorExtractor是提取关键点的描述向量类抽象基类。
+	//描述子匹配器DescriptorMatcher用于特征匹配，"Brute-force-Hamming"表示使用汉明距离进行匹配。
+	//**/
+
+	////第一步，检测Oriented Fast角点位置
+	//chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
+	//detector->detect(img_1, keypoints_1);     //对参数1图像进行特征的提取，并存放入参数2的数组中
+	//detector->detect(img_2, keypoints_2);
+
+	////第二步，根据角点计算BREIF描述子
+	//descriptor->compute(img_1, keypoints_1, descriptors_1);   //computer()计算关键点的描述子向量（注意思考参数设置的合理性）
+	//descriptor->compute(img_2, keypoints_2, descriptors_2);
+	//chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
+	//chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+	//cout << "extract ORB cost = " << time_used.count() << " seconds. " << endl;
+	//Mat outimg1;
+	//drawKeypoints(img_1, keypoints_1, outimg1, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
+	////imshow("ORB features", outimg1);
+	//imwrite(DATA_FOLDER + string("ORB特征点.jpg"), outimg1);
+
+	////第三步， 对两幅图像中的描述子进行匹配，使用hamming距离
+	//vector<DMatch> matches;    //DMatch是匹配关键点描述子 类, matches用于存放匹配项
+	//t1 = chrono::steady_clock::now();
+	//matcher->match(descriptors_1, descriptors_2, matches); //对参数1 2的描述子进行匹配，并将匹配项存放于matches中
+	//t2 = chrono::steady_clock::now();
+	//time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+	//cout << "match the ORB cost: " << time_used.count() << "seconds. " << endl;
+
+	////第四步，匹配点对筛选
+	////计算最小距离和最大距离
+	//auto min_max = minmax_element(matches.begin(), matches.end(),
+	//	[](const DMatch &m1, const DMatch &m2) { return m1.distance < m2.distance; });
+	//// auto 可以在声明变量的时候根据变量初始值的类型自动为此变量选择匹配的类型
+	//// minmax_element()返回指向范围内最小和最大元素的一对迭代器。参数1 2为起止迭代器范围
+	//// 参数3是二进制函数，该函数接受范围内的两个元素作为参数，并返回可转换为bool的值。
+	//// 返回的值指示作为第一个参数传递的元素是否小于第二个。该函数不得修改其任何参数。
+	//double min_dist = min_max.first->distance;  // min_max存储了一堆迭代器，first指向最小元素
+	//double max_dist = min_max.second->distance; // second指向最大元素
+
+	//printf("-- Max dist : %f \n", max_dist);
+	//printf("-- Min dist : %f \n", min_dist);
+
+	////当描述子之间的距离大于两倍最小距离时，就认为匹配有误。但有时最小距离会非常小，所以要设置一个经验值30作为下限。
+	//vector<DMatch> good_matches;  //存放良好的匹配项
+	//for (int i = 0; i < descriptors_1.rows; ++i)
+	//{
+	//	if (matches[i].distance <= max(2 * min_dist, 30.0))
+	//	{
+	//		good_matches.push_back(matches[i]);
+	//	}
+	//}
+
+	////第五步，绘制匹配结果
+	//Mat img_match;         //存放所有匹配点
+	//Mat img_goodmatch;     //存放好的匹配点
+	//					   // drawMatches用于绘制两幅图像的匹配关键点。
+	//					   // 参数1是第一个源图像，参数2是其关键点数组；参数3是第二张原图像，参数4是其关键点数组
+	//					   // 参数5是两张图像的匹配关键点数组,参数6用于存放函数的绘制结果
+	//drawMatches(img_1, keypoints_1, img_2, keypoints_2, matches, img_match);
+	//drawMatches(img_1, keypoints_1, img_2, keypoints_2, good_matches, img_goodmatch);
+	//imwrite(DATA_FOLDER + string("所有匹配点对.jpg"), img_match);
+	//imwrite(DATA_FOLDER + string("优化后匹配点对.jpg"), img_goodmatch);
+	//waitKey(0);
+
+
+}
+
+void chuixianyi::on_detectCrossBtn_clicked()
+{
+	//测量按钮点击一次开始测量，再次点击就退出测量
+	if (flagStartCamera && !flagEndCamera)
+	{
+		if (flagIsDetectedCross)
+		{
+			timer->start();
+			flagIsDetectedCross = false;
+			return;
+		}
+	}
+	flagIsDetectedCross = true;
+
+	prepareFrameLR();
+	readRectifyParams();
+
+	//这里就将校正后的frameLeft和frameRight显示在label上了
+	computeDisparityImage(frameLeft, frameRight, img1_rectified, img2_rectified, mapl1, mapl2, mapr1, mapr2, validRoi, disparity);
+	ui.textBrowser->append(QString::fromLocal8Bit("已将左右图像校正!"));
+
+	//载入原始图
+	g_srcImage = img1_rectified.clone();
+	cvtColor(g_srcImage, g_srcImage, COLOR_GRAY2RGB);
+
+	GetRedComponetBySplit(g_srcImage, g_redImage);	//提取红色分量
+	cvtColor(g_redImage, g_grayImage, COLOR_RGB2GRAY);	//显示灰度图 
+	imwrite(DATA_FOLDER + string("Grey_imageLeft.jpg"), g_grayImage);
+
+	//二值化
+	threshold(g_grayImage, imgHSVMask, threshold_value, 255, THRESH_BINARY);
+	g_midImage = Mat::zeros(imgHSVMask.size(), CV_8UC1);  //绘制
+
+	Delete_smallregions(imgHSVMask, g_midImage);		//去除小面积区域
+	imwrite(DATA_FOLDER + string("Target_imageLeft.jpg"), g_midImage);
+
+	//normalizeLetter显示效果图  
+	normalizeLetter(g_midImage, g_dstImage);
+
+	//曲线映射到原图
+	/*	threshold(g_grayImage, g_midImage, threshold_value, 255, CV_THRESH_BINARY);	*/
+	/*	imshow("【二值化图】", g_midImage);											*/
+	Line_reflect(g_dstImage, g_midImage);
+	imwrite(DATA_FOLDER + string("Reflect_imageLeft.jpg"), g_midImage);
+
+	//转换类型，保存skeleton图像
+	normalize(g_dstImage, g_midImage, 0, 255, NORM_MINMAX, CV_8U);
+	imwrite(DATA_FOLDER + string("Thinning_imageLeft.jpg"), g_midImage);
+
+
+
+
+	//载入原始图
+	g_srcImage = img2_rectified.clone();
+	cvtColor(g_srcImage, g_srcImage, COLOR_GRAY2RGB);
+
+	GetRedComponetBySplit(g_srcImage, g_redImage);	//提取红色分量
+	cvtColor(g_redImage, g_grayImage, COLOR_RGB2GRAY);	//显示灰度图 
+	imwrite(DATA_FOLDER + string("Grey_imageRight.jpg"), g_grayImage);
+
+	//二值化
+	threshold(g_grayImage, imgHSVMask, threshold_value, 255, THRESH_BINARY);
+	g_midImage = Mat::zeros(imgHSVMask.size(), CV_8UC1);  //绘制
+
+	Delete_smallregions(imgHSVMask, g_midImage);		//去除小面积区域
+	imwrite(DATA_FOLDER + string("Target_imageRight.jpg"), g_midImage);
+
+	//normalizeLetter显示效果图  
+	normalizeLetter(g_midImage, g_dstImage);
+
+	//曲线映射到原图
+	/*	threshold(g_grayImage, g_midImage, threshold_value, 255, CV_THRESH_BINARY);	*/
+	/*	imshow("【二值化图】", g_midImage);											*/
+	Line_reflect(g_dstImage, g_midImage);
+	imwrite(DATA_FOLDER + string("Reflect_imageRight.jpg"), g_midImage);
+
+	//转换类型，保存skeleton图像
+	normalize(g_dstImage, g_midImage, 0, 255, NORM_MINMAX, CV_8U);
+	imwrite(DATA_FOLDER + string("Thinning_imageRight.jpg"), g_midImage);
+
+	ui.textBrowser->append(QString::fromLocal8Bit("已检测激光光条中心!"));
+	QCoreApplication::processEvents();
+}
+
+void chuixianyi::GetRedComponetBySplit(Mat srcImg, Mat &red)
+{
+	//将整幅图中的红色分量都提取出来
+	Mat imgROI;
+	vector<Mat>channels;
+	split(srcImg, channels);
+	Mat blueComponet = channels.at(0);
+	Mat greenComponet = channels.at(1);
+	blueComponet = Mat::zeros(srcImg.size(), CV_8UC1);//Mat相当于指针，会对chnnels.at(0)重新赋值
+	greenComponet = Mat::zeros(srcImg.size(), CV_8UC1);
+	merge(channels, imgROI);//仅仅保留红色分量，其他分量赋值为0
+	red = imgROI;
+}
+
+void chuixianyi::ThinSubiteration1(Mat & pSrc, Mat & pDst)
+{
+	int rows = pSrc.rows;
+	int cols = pSrc.cols;
+	pSrc.copyTo(pDst);
+	for (int i = 0; i < rows; i++)
+	{
+		for (int j = 0; j < cols; j++)
+		{
+			if (pSrc.at<float>(i, j) == 1.0f)
+			{
+				/// get 8 neighbors
+				/// calculate C(p)
+				int neighbor0 = (int)pSrc.at<float>(i - 1, j - 1);
+				int neighbor1 = (int)pSrc.at<float>(i - 1, j);
+				int neighbor2 = (int)pSrc.at<float>(i - 1, j + 1);
+				int neighbor3 = (int)pSrc.at<float>(i, j + 1);
+				int neighbor4 = (int)pSrc.at<float>(i + 1, j + 1);
+				int neighbor5 = (int)pSrc.at<float>(i + 1, j);
+				int neighbor6 = (int)pSrc.at<float>(i + 1, j - 1);
+				int neighbor7 = (int)pSrc.at<float>(i, j - 1);
+				int C = int(~neighbor1 & (neighbor2 | neighbor3)) +
+					int(~neighbor3 & (neighbor4 | neighbor5)) +
+					int(~neighbor5 & (neighbor6 | neighbor7)) +
+					int(~neighbor7 & (neighbor0 | neighbor1));
+				if (C == 1)
+				{
+					/// calculate N
+					int N1 = int(neighbor0 | neighbor1) +
+						int(neighbor2 | neighbor3) +
+						int(neighbor4 | neighbor5) +
+						int(neighbor6 | neighbor7);
+					int N2 = int(neighbor1 | neighbor2) +
+						int(neighbor3 | neighbor4) +
+						int(neighbor5 | neighbor6) +
+						int(neighbor7 | neighbor0);
+					int N = min(N1, N2);
+					if ((N == 2) || (N == 3))
+					{
+						/// calculate criteria 3
+						int c3 = (neighbor1 | neighbor2 | ~neighbor4) & neighbor3;
+						if (c3 == 0)
+						{
+							pDst.at<float>(i, j) = 0.0f;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+void chuixianyi::ThinSubiteration2(Mat & pSrc, Mat & pDst)
+{
+	int rows = pSrc.rows;
+	int cols = pSrc.cols;
+	pSrc.copyTo(pDst);
+	for (int i = 0; i < rows; i++)
+	{
+		for (int j = 0; j < cols; j++)
+		{
+			if (pSrc.at<float>(i, j) == 1.0f)
+			{
+				/// get 8 neighbors
+				/// calculate C(p)
+				int neighbor0 = (int)pSrc.at<float>(i - 1, j - 1);
+				int neighbor1 = (int)pSrc.at<float>(i - 1, j);
+				int neighbor2 = (int)pSrc.at<float>(i - 1, j + 1);
+				int neighbor3 = (int)pSrc.at<float>(i, j + 1);
+				int neighbor4 = (int)pSrc.at<float>(i + 1, j + 1);
+				int neighbor5 = (int)pSrc.at<float>(i + 1, j);
+				int neighbor6 = (int)pSrc.at<float>(i + 1, j - 1);
+				int neighbor7 = (int)pSrc.at<float>(i, j - 1);
+				int C = int(~neighbor1 & (neighbor2 | neighbor3)) +
+					int(~neighbor3 & (neighbor4 | neighbor5)) +
+					int(~neighbor5 & (neighbor6 | neighbor7)) +
+					int(~neighbor7 & (neighbor0 | neighbor1));
+				if (C == 1)
+				{
+					/// calculate N
+					int N1 = int(neighbor0 | neighbor1) +
+						int(neighbor2 | neighbor3) +
+						int(neighbor4 | neighbor5) +
+						int(neighbor6 | neighbor7);
+					int N2 = int(neighbor1 | neighbor2) +
+						int(neighbor3 | neighbor4) +
+						int(neighbor5 | neighbor6) +
+						int(neighbor7 | neighbor0);
+					int N = min(N1, N2);
+					if ((N == 2) || (N == 3))
+					{
+						int E = (neighbor5 | neighbor6 | ~neighbor0) & neighbor7;
+						if (E == 0)
+						{
+							pDst.at<float>(i, j) = 0.0f;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+void chuixianyi::normalizeLetter(Mat & inputarray, Mat & outputarray)
+{
+	bool bDone = false;
+	int rows = inputarray.rows;
+	int cols = inputarray.cols;
+
+	inputarray.convertTo(inputarray, CV_32FC1);
+
+	inputarray.copyTo(outputarray);
+
+	outputarray.convertTo(outputarray, CV_32FC1);
+
+	/// pad source
+	Mat p_enlarged_src = Mat(rows + 2, cols + 2, CV_32FC1);
+	for (int i = 0; i < (rows + 2); i++)
+	{
+		p_enlarged_src.at<float>(i, 0) = 0.0f;
+		p_enlarged_src.at<float>(i, cols + 1) = 0.0f;
+	}
+	for (int j = 0; j < (cols + 2); j++)
+	{
+		p_enlarged_src.at<float>(0, j) = 0.0f;
+		p_enlarged_src.at<float>(rows + 1, j) = 0.0f;
+	}
+	for (int i = 0; i < rows; i++)
+	{
+		for (int j = 0; j < cols; j++)
+		{
+			if (inputarray.at<float>(i, j) >= threshold_value)
+			{			//调参
+				p_enlarged_src.at<float>(i + 1, j + 1) = 1.0f;
+			}
+			else
+				p_enlarged_src.at<float>(i + 1, j + 1) = 0.0f;
+		}
+	}
+
+	/// start to thin
+	Mat p_thinMat1 = Mat::zeros(rows + 2, cols + 2, CV_32FC1);
+	Mat p_thinMat2 = Mat::zeros(rows + 2, cols + 2, CV_32FC1);
+	Mat p_cmp = Mat::zeros(rows + 2, cols + 2, CV_8UC1);
+
+	while (bDone != true)
+	{
+		/// sub-iteration 1
+		ThinSubiteration1(p_enlarged_src, p_thinMat1);
+		/// sub-iteration 2
+		ThinSubiteration2(p_thinMat1, p_thinMat2);
+		/// compare
+		compare(p_enlarged_src, p_thinMat2, p_cmp, CMP_EQ);	//比较输入的src1和src2中的元素，真为255，否则为0
+															/// check
+		int num_non_zero = countNonZero(p_cmp);					//返回灰度值不为0的像素数
+		if (num_non_zero == (rows + 2) * (cols + 2))
+		{
+			bDone = true;
+		}
+		/// copy
+		p_thinMat2.copyTo(p_enlarged_src);
+	}
+	// copy result
+	for (int i = 0; i < rows; i++)
+	{
+		for (int j = 0; j < cols; j++)
+		{
+			outputarray.at<float>(i, j) = p_enlarged_src.at<float>(i + 1, j + 1);
+		}
+	}
+}
+
+void chuixianyi::Line_reflect(Mat & inputarray, Mat & outputarray)
+{
+	int rows = inputarray.rows;
+	int cols = inputarray.cols;
+	for (int i = 0; i < rows; i++)
+	{
+		for (int j = 0; j < cols; j++)
+		{
+			if (inputarray.at<float>(i, j) == 1.0f)
+			{
+				outputarray.at<float>(i, j) = 0.0f;
+			}
+		}
+	}
+}
+
+void chuixianyi::Delete_smallregions(Mat & pSrc, Mat & pDst)
+{
+	// 提取连通区域，并剔除小面积联通区域
+	vector<vector<Point>> contours;           //二值图像轮廓的容器
+	vector<Vec4i> hierarchy;                  //4个int向量，分别表示后、前、父、子的索引编号
+	findContours(pSrc, contours, hierarchy, RETR_LIST, CHAIN_APPROX_NONE);             //检测所有轮廓
+
+	vector<vector<Point>>::iterator k;                    //迭代器，访问容器数据
+
+	for (k = contours.begin(); k != contours.end();)      //遍历容器,设置面积因子
+	{
+		if (contourArea(*k, false) < msize)
+		{//删除指定元素，返回指向删除元素下一个元素位置的迭代器
+			k = contours.erase(k);
+		}
+		else
+			++k;
+	}
+
+	//contours[i]代表第i个轮廓，contours[i].size()代表第i个轮廓上所有的像素点
+	for (int i = 0; i < contours.size(); i++)
+	{
+		for (int j = 0; j < contours[i].size(); j++)
+		{
+			//获取轮廓上点的坐标
+			Point P = Point(contours[i][j].x, contours[i][j].y);
+		}
+		drawContours(pDst, contours, i, Scalar(255), -1, 8);
+	}
+}
+
+
+
+void chuixianyi::readRectifyParams()
+{
+	FileStorage stereoStore(DATA_FOLDER + string(stereoCalibrate_result_L), FileStorage::READ);
+	stereoStore["cameraMatrix1"] >> cameraMatrix_L;
+	stereoStore["cameraMatrix2"] >> cameraMatrix_R;
+	stereoStore["distCoeffs1"] >> distCoeffs_L;
+	stereoStore["distCoeffs2"] >> distCoeffs_R;
+	stereoStore["R"] >> R;
+	stereoStore["T"] >> T;
+	stereoStore["E"] >> E;
+	stereoStore["F"] >> F;
+	stereoStore.release();
+
+	FileStorage stereoParamsStore(DATA_FOLDER + string(stereoRectifyParams), FileStorage::READ);
+	stereoParamsStore["R1"] >> R1;
+	stereoParamsStore["R2"] >> R2;
+	stereoParamsStore["P1"] >> P1;
+	stereoParamsStore["P2"] >> P2;
+	stereoParamsStore["Q"] >> Q;
+	//stereoParamsStore["mapl1"] >> mapl1;
+	//stereoParamsStore["mapl2"] >> mapl2;
+	//stereoParamsStore["mapr1"] >> mapr1;
+	//stereoParamsStore["mapr2"] >> mapr2;
+	stereoParamsStore.release();
+
+
+	validRoi[0], validRoi[1] = stereoRectification(stereoRectifyParams, cameraMatrix_L, distCoeffs_L, cameraMatrix_R, distCoeffs_R,
+		imageSize, R, T, R1, R2, P1, P2, Q, mapl1, mapl2, mapr1, mapr2);
+	ui.textBrowser->append(QString::fromLocal8Bit("已读取相机标定数据!"));
+	QCoreApplication::processEvents();
+}
+
+void chuixianyi::prepareFrameLR()
+{
+	if (flagStartCamera && !flagEndCamera)
+	{
+		//摄像头画面静止
+		timer->stop();
+		Size size(IMAGE_WIDTH, IMAGE_HEIGHT);
+
+		PvImage *alInputImage = alBuffer->GetImage();
+		alInputImage->Alloc(IMAGE_WIDTH, IMAGE_HEIGHT, PvPixelMono8);
+		Mat lMat(size, CV_8UC1, alInputImage->GetDataPointer());
+		cvtColor(lMat, frameLeft, COLOR_RGB2BGR);
+
+		PvImage *blInputImage = blBuffer->GetImage();
+		blInputImage->Alloc(IMAGE_WIDTH, IMAGE_HEIGHT, PvPixelMono8);
+		Mat rMat(size, CV_8UC1, blInputImage->GetDataPointer());
+		cvtColor(rMat, frameRight, COLOR_RGB2BGR);
+
+
+		ui.textBrowser->append(QString::fromLocal8Bit("已捕捉摄像头画面!"));
+		QCoreApplication::processEvents();
 	}
 }
 
@@ -1029,28 +1687,39 @@ bool chuixianyi::computeDisparityImage(Mat& img1, Mat& img2, Mat& img1_rectified
 	return true;
 }
 
-void chuixianyi::readRectifyParams()
-{
-	FileStorage stereoStore(DATA_FOLDER + string(stereoCalibrate_result_L), FileStorage::READ);
-	stereoStore["cameraMatrix1"] >> cameraMatrix_L;
-	stereoStore["cameraMatrix2"] >> cameraMatrix_R;
-	stereoStore["distCoeffs1"] >> distCoeffs_L;
-	stereoStore["distCoeffs2"] >> distCoeffs_R;
-	stereoStore["R"] >> R;
-	stereoStore["T"] >> T;
-	stereoStore["E"] >> E;
-	stereoStore["F"] >> F;
-	stereoStore.release();
 
-	FileStorage stereoParamsStore(DATA_FOLDER + string(stereoRectifyParams), FileStorage::READ);
-	stereoParamsStore["R1"] >> R1;
-	stereoParamsStore["R2"] >> R2;
-	stereoParamsStore["P1"] >> P1;
-	stereoParamsStore["P2"] >> P2;
-	stereoParamsStore["Q"] >> Q;
-	//stereoParamsStore["mapl1"] >> mapl1;
-	//stereoParamsStore["mapl2"] >> mapl2;
-	//stereoParamsStore["mapr1"] >> mapr1;
-	//stereoParamsStore["mapr2"] >> mapr2;
-	stereoParamsStore.release();
+
+
+
+
+void chuixianyi::on_planeCalibrate_clicked()
+{
+	//读取相机标定的数据
+	//校正图片
+
+	prepareFrameLR();
+	readRectifyParams();
+
+	//这里就将校正后的frameLeft和frameRight显示在label上了
+	computeDisparityImage(frameLeft, frameRight, img1_rectified, img2_rectified, mapl1, mapl2, mapr1, mapr2, validRoi, disparity);
+	ui.textBrowser->append(QString::fromLocal8Bit("已将左右图像校正!"));
+
+
+	lightPlaneCali(cameraMatrix_L, distCoeffs_L, mapl1, mapl2);
+	lightPlaneCali(cameraMatrix_R, distCoeffs_R, mapr1, mapr2);
+}
+
+void chuixianyi::lightPlaneCali(Mat &cameraMatrix, Mat &distCoeffs, Mat &map1, Mat &map2)
+{
+	
+	
+
+
+}
+
+
+
+void chuixianyi::on_liveShowCoordinate_clicked()
+{
+
 }

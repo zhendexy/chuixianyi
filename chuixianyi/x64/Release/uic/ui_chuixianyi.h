@@ -40,6 +40,10 @@ public:
     QPushButton *calibrateBtn;
     QPushButton *rectifyBtn;
     QPushButton *measureBtn;
+    QPushButton *autoMatchBtn;
+    QPushButton *detectCrossBtn;
+    QPushButton *planeCalibrateBtn;
+    QPushButton *liveShowCoordinateBtn;
     QSpacerItem *verticalSpacer;
     QPushButton *exitBtn;
     QWidget *layoutWidget;
@@ -95,6 +99,26 @@ public:
         measureBtn->setObjectName(QStringLiteral("measureBtn"));
 
         verticalLayout->addWidget(measureBtn);
+
+        autoMatchBtn = new QPushButton(verticalLayoutWidget);
+        autoMatchBtn->setObjectName(QStringLiteral("autoMatchBtn"));
+
+        verticalLayout->addWidget(autoMatchBtn);
+
+        detectCrossBtn = new QPushButton(verticalLayoutWidget);
+        detectCrossBtn->setObjectName(QStringLiteral("detectCrossBtn"));
+
+        verticalLayout->addWidget(detectCrossBtn);
+
+        planeCalibrateBtn = new QPushButton(verticalLayoutWidget);
+        planeCalibrateBtn->setObjectName(QStringLiteral("planeCalibrateBtn"));
+
+        verticalLayout->addWidget(planeCalibrateBtn);
+
+        liveShowCoordinateBtn = new QPushButton(verticalLayoutWidget);
+        liveShowCoordinateBtn->setObjectName(QStringLiteral("liveShowCoordinateBtn"));
+
+        verticalLayout->addWidget(liveShowCoordinateBtn);
 
         verticalSpacer = new QSpacerItem(20, 40, QSizePolicy::Minimum, QSizePolicy::Expanding);
 
@@ -154,6 +178,10 @@ public:
         calibrateBtn->setText(QApplication::translate("chuixianyiClass", "\346\240\207\345\256\232\347\233\270\346\234\272", Q_NULLPTR));
         rectifyBtn->setText(QApplication::translate("chuixianyiClass", "\346\240\241\346\255\243\345\233\276\345\203\217", Q_NULLPTR));
         measureBtn->setText(QApplication::translate("chuixianyiClass", "\351\200\211\347\202\271\346\265\213\351\207\217", Q_NULLPTR));
+        autoMatchBtn->setText(QApplication::translate("chuixianyiClass", "\350\207\252\345\212\250\345\214\271\351\205\215", Q_NULLPTR));
+        detectCrossBtn->setText(QApplication::translate("chuixianyiClass", "\346\243\200\346\265\213\344\272\244\347\202\271", Q_NULLPTR));
+        planeCalibrateBtn->setText(QApplication::translate("chuixianyiClass", "\345\205\211\345\271\263\351\235\242\346\240\207\345\256\232", Q_NULLPTR));
+        liveShowCoordinateBtn->setText(QApplication::translate("chuixianyiClass", "\345\256\236\346\227\266\346\230\276\347\244\272\345\236\202\347\272\277\345\235\220\346\240\207", Q_NULLPTR));
         exitBtn->setText(QApplication::translate("chuixianyiClass", "\351\200\200\345\207\272", Q_NULLPTR));
         labelLeft->setText(QApplication::translate("chuixianyiClass", "\345\267\246\346\221\204\345\203\217\345\244\264", Q_NULLPTR));
         labelRight->setText(QApplication::translate("chuixianyiClass", "\345\217\263\346\221\204\345\203\217\345\244\264", Q_NULLPTR));

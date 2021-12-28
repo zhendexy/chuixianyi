@@ -23,10 +23,13 @@
 #define LABEL_HEIGHT (400)
 
 
+#include "opencv2/core/core_c.h"
 #include "opencv2/core/core.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/calib3d/calib3d.hpp"
 #include "opencv2/highgui/highgui.hpp"
+#include "opencv2/features2d/features2d.hpp"
+#include "opencv2/xfeatures2d/nonfree.hpp"
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -80,7 +83,17 @@ public:
 	bool computeDisparityImage(Mat& img1, Mat& img2, Mat& img1_rectified,
 		Mat& img2_rectified, Mat& mapl1, Mat& mapl2, Mat& mapr1, Mat& mapr2, Rect validRoi[2], Mat& disparity);
 	void readRectifyParams();
+	void prepareFrameLR();
 	Point3f uv2xyz(Point2f uvLeft, Point2f uvRight);
+
+
+	void lightPlaneCali(Mat &intrinsic, Mat &distortion, Mat &mapx, Mat &mapy);
+	void ThinSubiteration1(Mat & pSrc, Mat & pDst);
+	void ThinSubiteration2(Mat & pSrc, Mat & pDst);
+	void normalizeLetter(Mat & inputarray, Mat & outputarray);
+	void Line_reflect(Mat & inputarray, Mat & outputarray);
+	void Delete_smallregions(Mat & pSrc, Mat & pDst);
+	void GetRedComponetBySplit(Mat srcImg, Mat &red);
 
 
 
@@ -130,9 +143,19 @@ private:
 	string imageNameLeft, imageNameRight;
 	Mat imageLeft, imageRight;
 	bool flagIsMeasuring = false;
+	bool flagIsMatched = false;
+	bool flagIsDetectedCross = false;
 	unsigned xoffset, yoffset;
 	vector<QPoint> labelPoints;
 	vector<Vec4d> realPoints;
+
+	//提取激光光条中心
+	Mat g_srcImage, g_dstImage, g_midImage, g_grayImage, imgHSVMask, g_redImage;//原始图、中间图和效果图
+	int threshold_value = 20;	//阈值
+	int msize = 800;				//面积因子
+	float start_time, end_time, sum_time;	//处理时间
+
+	
 
 private slots:
 void on_startCameraBtn_clicked();
@@ -141,6 +164,10 @@ void on_saveFrameBtn_clicked();
 void on_calibrateBtn_clicked();
 void on_rectifyBtn_clicked();
 void on_measureBtn_clicked();
+void on_autoMatchBtn_clicked();
+void on_detectCrossBtn_clicked();
+void on_planeCalibrate_clicked();
+void on_liveShowCoordinate_clicked();
 
 void readFrame();
 

@@ -67,6 +67,34 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="autoMatchBtn">
+       <property name="text">
+        <string>自动匹配</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="detectCrossBtn">
+       <property name="text">
+        <string>检测交点</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="planeCalibrateBtn">
+       <property name="text">
+        <string>光平面标定</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="liveShowCoordinateBtn">
+       <property name="text">
+        <string>实时显示垂线坐标</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <spacer name="verticalSpacer">
        <property name="orientation">
         <enum>Qt::Vertical</enum>

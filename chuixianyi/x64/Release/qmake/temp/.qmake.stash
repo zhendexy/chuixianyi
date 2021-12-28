@@ -1,5 +1,7 @@
 QMAKE_CXX.INCDIRS = \
     "C:\\Program Files\\JAI\\eBUS SDK\\Includes" \
+    C:\\opencv_with_contrib\\install\\include \
+    C:\\opencv_with_contrib\\install\\include\\opencv2 \
     C:\\opencv\\opencv\\build\\include \
     C:\\opencv\\opencv\\build\\include\\opencv2 \
     "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\include" \
@@ -10,6 +12,7 @@ QMAKE_CXX.INCDIRS = \
     "C:\\Program Files (x86)\\Windows Kits\\8.1\\Include\\winrt"
 QMAKE_CXX.LIBDIRS = \
     "C:\\Program Files\\JAI\\eBUS SDK\\Libraries" \
+    C:\\opencv_with_contrib\\install\\x64\\vc14\\lib \
     C:\\opencv\\opencv\\build\\x64\\vc15\\lib \
     "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\lib\\amd64" \
     "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\atlmfc\\lib\\amd64" \
