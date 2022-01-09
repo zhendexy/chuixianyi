@@ -22,7 +22,7 @@ QT_WARNING_PUSH
 QT_WARNING_DISABLE_DEPRECATED
 struct qt_meta_stringdata_chuixianyi_t {
     QByteArrayData data[13];
-    char stringdata0[270];
+    char stringdata0[276];
 };
 #define QT_MOC_LITERAL(idx, ofs, len) \
     Q_STATIC_BYTE_ARRAY_DATA_HEADER_INITIALIZER_WITH_OFFSET(len, \
@@ -41,9 +41,9 @@ QT_MOC_LITERAL(6, 110, 21), // "on_rectifyBtn_clicked"
 QT_MOC_LITERAL(7, 132, 21), // "on_measureBtn_clicked"
 QT_MOC_LITERAL(8, 154, 23), // "on_autoMatchBtn_clicked"
 QT_MOC_LITERAL(9, 178, 25), // "on_detectCrossBtn_clicked"
-QT_MOC_LITERAL(10, 204, 25), // "on_planeCalibrate_clicked"
-QT_MOC_LITERAL(11, 230, 29), // "on_liveShowCoordinate_clicked"
-QT_MOC_LITERAL(12, 260, 9) // "readFrame"
+QT_MOC_LITERAL(10, 204, 28), // "on_planeCalibrateBtn_clicked"
+QT_MOC_LITERAL(11, 233, 32), // "on_liveShowCoordinateBtn_clicked"
+QT_MOC_LITERAL(12, 266, 9) // "readFrame"
 
     },
     "chuixianyi\0on_startCameraBtn_clicked\0"
@@ -52,8 +52,9 @@ QT_MOC_LITERAL(12, 260, 9) // "readFrame"
     "on_rectifyBtn_clicked\0on_measureBtn_clicked\0"
     "on_autoMatchBtn_clicked\0"
     "on_detectCrossBtn_clicked\0"
-    "on_planeCalibrate_clicked\0"
-    "on_liveShowCoordinate_clicked\0readFrame"
+    "on_planeCalibrateBtn_clicked\0"
+    "on_liveShowCoordinateBtn_clicked\0"
+    "readFrame"
 };
 #undef QT_MOC_LITERAL
 
@@ -113,8 +114,8 @@ void chuixianyi::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, 
         case 5: _t->on_measureBtn_clicked(); break;
         case 6: _t->on_autoMatchBtn_clicked(); break;
         case 7: _t->on_detectCrossBtn_clicked(); break;
-        case 8: _t->on_planeCalibrate_clicked(); break;
-        case 9: _t->on_liveShowCoordinate_clicked(); break;
+        case 8: _t->on_planeCalibrateBtn_clicked(); break;
+        case 9: _t->on_liveShowCoordinateBtn_clicked(); break;
         case 10: _t->readFrame(); break;
         default: ;
         }

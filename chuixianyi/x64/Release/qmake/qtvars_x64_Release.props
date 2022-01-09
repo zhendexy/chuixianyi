@@ -1,7 +1,7 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
 <Qt_DEFINES_>UNICODE;_UNICODE;WIN32;WIN64;QT_NO_DEBUG;QT_WIDGETS_LIB;QT_GUI_LIB;QT_CORE_LIB;NDEBUG</Qt_DEFINES_>
-<Qt_INCLUDEPATH_>"C:\Users\jzpwh\documents\visual studio 2015\Projects\chuixianyi\chuixianyi\x64\Release\qmake\temp";E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\include;E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\include\QtWidgets;E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\include\QtGui;E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\include\QtANGLE;E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\include\QtCore;E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\mkspecs\win32-msvc</Qt_INCLUDEPATH_>
+<Qt_INCLUDEPATH_>"C:\Users\jzpwh\Documents\Visual Studio 2015\Projects\chuixianyi\chuixianyi\x64\Release\qmake\temp";E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\include;E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\include\QtWidgets;E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\include\QtGui;E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\include\QtANGLE;E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\include\QtCore;E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\mkspecs\win32-msvc</Qt_INCLUDEPATH_>
 <Qt_LIBS_>E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\lib\qtmain.lib;shell32.lib;E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\lib\Qt5Widgets.lib;E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\lib\Qt5Gui.lib;E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\lib\Qt5Core.lib</Qt_LIBS_>
 <Qt_LIBPATH_>E:\Qt\Qt5.9.9\5.9.9\msvc2015_64\lib;C:\openssl\lib;C:\Utils\my_sql\my_sql\lib;C:\Utils\postgresql\pgsql\lib</Qt_LIBPATH_>
 <QMake_QT_SYSROOT_></QMake_QT_SYSROOT_>

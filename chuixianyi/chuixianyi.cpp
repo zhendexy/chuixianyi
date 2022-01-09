@@ -21,6 +21,126 @@ chuixianyi::chuixianyi(QWidget *parent)
 }
 
 
+
+
+
+QImage chuixianyi::CvMat2QImage(const Mat &mat)
+{
+	// 图像的通道
+	int channel = mat.channels();
+
+	// 设立一个表 直接查询 其中 0 2 是无效值 1 3 4 对应的转换值
+	const std::map<int, QImage::Format> img_cvt_map{
+		{ 1, QImage::Format_Grayscale8 },
+		{ 3, QImage::Format_RGB888 },
+		{ 4, QImage::Format_ARGB32 }
+	};
+
+	QImage image(mat.data, mat.cols, mat.rows,
+		static_cast<int>(mat.step),
+		img_cvt_map.at(channel));
+
+	// 三通道图像 值做 通道转换
+	return channel == 3 ? image.rgbSwapped() : image;
+}
+
+Mat chuixianyi::QImage2CvMat(const QImage &image)
+{
+	cv::Mat mat;
+	const std::map<QImage::Format, int> img_cvt_map{
+		{ QImage::Format_Grayscale8, 1 },
+		{ QImage::Format_RGB888, 3 },
+		{ QImage::Format_ARGB32, 4 }
+	};
+
+	auto aa = image.format();
+	return cv::Mat(image.height(), image.width(), img_cvt_map.at(image.format()));
+}
+
+void chuixianyi::readRectifyParams()
+{
+	FileStorage singleLStore(DATA_FOLDER + string(singleCalibrate_result_L), FileStorage::READ);
+	singleLStore["cameraMatrix"] >> cameraMatrix_L;
+	singleLStore["distCoeffs"] >> distCoeffs_L;
+	singleLStore["rotationMatrix"] >> rotationMatrix_L;
+	singleLStore["translationMatrix"] >> translationMatrix_L;
+	singleLStore["extrinsicMatrix"] >> extrinsicMatrix_L; 
+	singleLStore["projectionMatrix"] >> projectionMatrix_L;
+	singleLStore.release();
+
+
+	FileStorage singleRStore(DATA_FOLDER + string(singleCalibrate_result_R), FileStorage::READ);
+	singleRStore["cameraMatrix"] >> cameraMatrix_R;
+	singleRStore["distCoeffs"] >> distCoeffs_R;
+	singleRStore["rotationMatrix"] >> rotationMatrix_R;
+	singleRStore["translationMatrix"] >> translationMatrix_R;
+	singleRStore["extrinsicMatrix"] >> extrinsicMatrix_R;
+	singleRStore["projectionMatrix"] >> projectionMatrix_R;
+	singleRStore.release();
+
+	FileStorage stereoStore(DATA_FOLDER + string(stereoCalibrate_result_L), FileStorage::READ);
+	//stereoStore["cameraMatrix1"] >> cameraMatrix_L;
+	//stereoStore["cameraMatrix2"] >> cameraMatrix_R;
+	//stereoStore["distCoeffs1"] >> distCoeffs_L;
+	//stereoStore["distCoeffs2"] >> distCoeffs_R;
+	stereoStore["R"] >> R;
+	stereoStore["T"] >> T;
+	stereoStore["E"] >> E;
+	stereoStore["F"] >> F;
+	stereoStore.release();
+
+	FileStorage stereoParamsStore(DATA_FOLDER + string(stereoRectifyParams), FileStorage::READ);
+	stereoParamsStore["R1"] >> R1;
+	stereoParamsStore["R2"] >> R2;
+	stereoParamsStore["P1"] >> P1;
+	stereoParamsStore["P2"] >> P2;
+	stereoParamsStore["Q"] >> Q;
+	//stereoParamsStore["mapl1"] >> mapl1;
+	//stereoParamsStore["mapl2"] >> mapl2;
+	//stereoParamsStore["mapr1"] >> mapr1;
+	//stereoParamsStore["mapr2"] >> mapr2;
+	stereoParamsStore.release();
+
+
+	validRoi[0], validRoi[1] = stereoRectification(stereoRectifyParams, cameraMatrix_L, distCoeffs_L, cameraMatrix_R, distCoeffs_R,
+		imageSize, R, T, R1, R2, P1, P2, Q, mapl1, mapl2, mapr1, mapr2);
+	ui.textBrowser->append(QString::fromLocal8Bit("已读取相机标定数据!"));
+	QCoreApplication::processEvents();
+}
+
+void chuixianyi::prepareFrameLR()
+{
+	if (flagStartCamera && !flagEndCamera)
+	{
+		//摄像头画面静止
+		timer->stop();
+		Size size(IMAGE_WIDTH, IMAGE_HEIGHT);
+
+		PvImage *alInputImage = alBuffer->GetImage();
+		alInputImage->Alloc(IMAGE_WIDTH, IMAGE_HEIGHT, PvPixelMono8);
+		Mat lMat(size, CV_8UC1, alInputImage->GetDataPointer());
+		cvtColor(lMat, frameLeft, COLOR_RGB2BGR);
+
+		PvImage *blInputImage = blBuffer->GetImage();
+		blInputImage->Alloc(IMAGE_WIDTH, IMAGE_HEIGHT, PvPixelMono8);
+		Mat rMat(size, CV_8UC1, blInputImage->GetDataPointer());
+		cvtColor(rMat, frameRight, COLOR_RGB2BGR);
+
+
+		ui.textBrowser->append(QString::fromLocal8Bit("已捕捉摄像头画面!"));
+		QCoreApplication::processEvents();
+	}
+}
+
+
+
+//******************************************************************
+//
+//
+//					打开相机
+//
+//
+//******************************************************************
 void chuixianyi::on_startCameraBtn_clicked()
 {
 	timer->start();
@@ -83,10 +203,6 @@ void chuixianyi::on_saveFrameBtn_clicked()
 	ui.textBrowser->append(QString::fromLocal8Bit("已保存当前帧画面!"));
 	QCoreApplication::processEvents();
 }
-
-
-
-
 
 void chuixianyi::startCamera()
 {
@@ -341,7 +457,6 @@ void chuixianyi::StopAcquireImages(PvDevice *aDevice, PvDevice *bDevice, PvStrea
 	bPipeline->Stop();
 }
 
-
 void chuixianyi::readFrame()
 {
 	if (!flagStartCamera)
@@ -381,43 +496,20 @@ void chuixianyi::readFrame()
 }
 
 
-QImage chuixianyi::CvMat2QImage(const Mat &mat)
-{
-	// 图像的通道
-	int channel = mat.channels();
-
-	// 设立一个表 直接查询 其中 0 2 是无效值 1 3 4 对应的转换值
-	const std::map<int, QImage::Format> img_cvt_map{
-		{ 1, QImage::Format_Grayscale8 },
-		{ 3, QImage::Format_RGB888 },
-		{ 4, QImage::Format_ARGB32 }
-	};
-
-	QImage image(mat.data, mat.cols, mat.rows,
-		static_cast<int>(mat.step),
-		img_cvt_map.at(channel));
-
-	// 三通道图像 值做 通道转换
-	return channel == 3 ? image.rgbSwapped() : image;
-}
-
-Mat chuixianyi::QImage2CvMat(const QImage &image)
-{
-	cv::Mat mat;
-	const std::map<QImage::Format, int> img_cvt_map{
-		{ QImage::Format_Grayscale8, 1 },
-		{ QImage::Format_RGB888, 3 },
-		{ QImage::Format_ARGB32, 4 }
-	};
-
-	auto aa = image.format();
-	return cv::Mat(image.height(), image.width(), img_cvt_map.at(image.format()));
-}
 
 
 
 
 
+//******************************************************************
+//
+//
+//					双目相机的标定和测量
+//
+// 单目标定、双目标定、矫正和校正图片、手动选点测量、uv2xyz()函数
+//
+//
+//******************************************************************
 void chuixianyi::on_calibrateBtn_clicked()
 {
 	if (flagStartCamera && !flagEndCamera)
@@ -632,6 +724,632 @@ void chuixianyi::mousePressEvent(QMouseEvent *event)
 	}
 }
 
+
+
+/*
+单目标定
+参数：
+imageList		存放标定图片名称的txt
+singleCalibrateResult	存放标定结果的txt
+objectPoints	世界坐标系中点的坐标
+corners_seq		存放图像中的角点,用于立体标定
+cameraMatrix	相机的内参数矩阵
+distCoeffs		相机的畸变系数
+imageSize		输入图像的尺寸（像素）
+patternSize		标定板每行的角点个数, 标定板每列的角点个数 (15, 9)
+chessboardSize	棋盘上每个方格的边长（mm）
+注意：亚像素精确化时，允许输入单通道，8位或者浮点型图像。由于输入图像的类型不同，下面用作标定函数参数的内参数矩阵和畸变系数矩阵在初始化时也要数据注意类型。
+*/
+bool chuixianyi::singleCameraCalibrate(const char* imageFolder, const char* imageList, const char* singleCalibrateResult, vector<vector<Point3f>>& objectPoints,
+	vector<vector<Point2f>>& corners_seq, Mat& cameraMatrix, Mat& distCoeffs, Size& imageSize, Size patternSize, Size chessboardSize)
+
+{
+	int n_boards = 0;
+	ifstream imageStore(DATA_FOLDER + string(imageList)); // 打开存放标定图片名称的txt
+	FileStorage resultStore(DATA_FOLDER + string(singleCalibrateResult), FileStorage::WRITE); // 保存标定结果的txt
+	// 开始提取角点坐标
+	vector<Point2f> corners; // 存放一张图片的角点坐标 
+	string imageName; // 读取的标定图片的名称
+	while (getline(imageStore, imageName)) // 读取txt的每一行（每一行存放了一张标定图片的名称）
+	{
+		n_boards++;
+		Mat imageInput = imread(imageFolder + imageName);
+		cvtColor(imageInput, imageInput, COLOR_RGB2GRAY);
+		imageSize.width = imageInput.cols; // 获取图片的宽度
+		imageSize.height = imageInput.rows; // 获取图片的高度
+											// 查找标定板的角点
+		bool found = findChessboardCorners(imageInput, patternSize, corners); // 最后一个参数int flags的缺省值为：CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_NORMALIZE_IMAGE
+																			  // 亚像素精确化。在findChessboardCorners中自动调用了cornerSubPix，为了更加精细化，我们自己再调用一次。
+		if (found) // 当所有的角点都被找到
+		{
+			TermCriteria criteria = TermCriteria(TermCriteria::Type::EPS + TermCriteria::Type::MAX_ITER, 40, 0.001); // 终止标准，迭代40次或者达到0.001的像素精度
+			cornerSubPix(imageInput, corners, Size(11, 11), Size(-1, -1), criteria);// 由于我们的图像只存较大，将搜索窗口调大一些，（11， 11）为真实窗口的一半，真实大小为（11*2+1， 11*2+1）--（23， 23）
+			corners_seq.push_back(corners); // 存入角点序列
+											// 绘制角点
+											//drawChessboardCorners(imageInput, patternSize, corners, true);
+											//imshow("cornersframe", imageInput);
+											//waitKey(500); // 暂停0.5s
+
+			Mat imageCorners = imageInput.clone();
+			cvtColor(imageCorners, imageCorners, COLOR_GRAY2RGB);
+			drawChessboardCorners(imageCorners, patternSize, corners, true);
+			string cornersName = "corners_" + imageName;
+			imwrite(DATA_FOLDER + string("corners\\") + cornersName, imageCorners);
+		}
+	}
+	
+	// 进行相机标定
+	// 计算角点对应的三维坐标
+	int pic, i, j;
+	for (pic = 0; pic < n_boards; pic++)
+	{
+		vector<Point3f> realPointSet;
+		for (i = 0; i < patternSize.height; i++)
+		{
+			for (j = 0; j < patternSize.width; j++)
+			{
+				Point3f realPoint;
+				// 假设标定板位于世界坐标系Z=0的平面
+				realPoint.x = j * chessboardSize.width;
+				realPoint.y = i * chessboardSize.height;
+				realPoint.z = 0;
+				realPointSet.push_back(realPoint);
+			}
+		}
+		objectPoints.push_back(realPointSet);
+	}
+	// 执行标定程序
+	vector<Mat> rvec; // 旋转向量
+	vector<Mat> tvec; // 平移向量
+	cv::calibrateCamera(objectPoints, corners_seq, imageSize, cameraMatrix, distCoeffs, rvec, tvec, 0);
+	// 保存标定结果
+	resultStore << "cameraMatrix" << cameraMatrix; // 相机内参数矩阵
+	resultStore << "distCoeffs" << distCoeffs; // 相机畸变系数
+	// 保存第一张图片的相机外参矩阵
+	resultStore << "rotationVector" << rvec[0];
+	Mat rotationMatrix, translationMatrix, extrinsicMatrix, projectionMatrix;
+	Rodrigues(rvec[0], rotationMatrix); // 将旋转向量转换为相对应的旋转矩阵
+	resultStore << "rotationMatrix" << rotationMatrix; // 相机旋转矩阵
+	translationMatrix = tvec[0];
+	resultStore << "translationMatrix" << translationMatrix; // 相机平移矩阵
+	hconcat(rotationMatrix, translationMatrix, extrinsicMatrix);
+	resultStore << "extrinsicMatrix" << extrinsicMatrix; // 相机外参数矩阵
+	projectionMatrix = cameraMatrix*extrinsicMatrix;
+	resultStore << "projectionMatrix" << projectionMatrix; // 相机投影矩阵
+	// 计算重投影点，与原图角点比较，得到误差
+	double errPerImage = 0.; // 每张图像的误差
+	double errAverage = 0.; // 所有图像的平均误差
+	double totalErr = 0.; // 误差总和
+	vector<Point2f> projectImagePoints; // 重投影点
+	for (i = 0; i < n_boards; i++)
+	{
+		vector<Point3f> tempObjectPoints = objectPoints[i]; // 临时三维点
+		// 计算重投影点
+		projectPoints(tempObjectPoints, rvec[i], tvec[i], cameraMatrix, distCoeffs, projectImagePoints);
+		// 计算新的投影点与旧的投影点之间的误差
+		vector<Point2f> tempCornersPoints = corners_seq[i];// 临时存放旧投影点
+		Mat tempCornersPointsMat = Mat(1, tempCornersPoints.size(), CV_32FC2); // 定义成两个通道的Mat是为了计算误差
+		Mat projectImagePointsMat = Mat(1, projectImagePoints.size(), CV_32FC2);
+		// 赋值
+		for (int j = 0; j < tempCornersPoints.size(); j++)
+		{
+			projectImagePointsMat.at<Vec2f>(0, j) = Vec2f(projectImagePoints[j].x, projectImagePoints[j].y);
+			tempCornersPointsMat.at<Vec2f>(0, j) = Vec2f(tempCornersPoints[j].x, tempCornersPoints[j].y);
+		}
+		// opencv里的norm函数其实把这里的两个通道分别分开来计算的(X1-X2)^2的值，然后统一求和，最后进行根号
+		errPerImage = norm(tempCornersPointsMat, projectImagePointsMat, NORM_L2) / (patternSize.width * patternSize.height);
+		totalErr += errPerImage;
+		//resultStore << "No." + to_string(i + 1) + "errPerImage" << errPerImage;
+	}
+	//resultStore << "totalErr/n_boards" << totalErr / n_boards;
+	imageStore.close();
+	resultStore.release();
+	return true;
+}
+
+/*
+双目标定:计算两摄像机相对旋转矩阵 R,平移向量 T, 本征矩阵E, 基础矩阵F
+参数：
+stereoCalibrateResult	存放立体标定结果的txt
+objectPoints			三维点
+imagePoints				二维图像上的点
+cameraMatrix			相机内参数
+distCoeffs				相机畸变系数
+imageSize				图像尺寸
+R		左右相机相对的旋转矩阵
+T		左右相机相对的平移向量
+E		本征矩阵
+F		基础矩阵
+*/
+bool chuixianyi::stereoCalibrate(const char* stereoCalibrateResult, vector<vector<Point3f>> objectPoints, vector<vector<Point2f>> imagePoints1, vector<vector<Point2f>> imagePoints2,
+	Mat& cameraMatrix1, Mat& distCoeffs1, Mat& cameraMatrix2, Mat& distCoeffs2, Size& imageSize, Mat& R, Mat& T, Mat& E, Mat& F)
+
+{
+	FileStorage stereoStore(DATA_FOLDER + string(stereoCalibrateResult), FileStorage::WRITE);
+	TermCriteria criteria = TermCriteria(TermCriteria::COUNT | TermCriteria::EPS, 30, 1e-6); // 终止条件
+	cv::stereoCalibrate(objectPoints, imagePoints1, imagePoints2, cameraMatrix1, distCoeffs1,
+		cameraMatrix2, distCoeffs2, imageSize, R, T, E, F, CALIB_FIX_INTRINSIC, criteria); // 注意参数顺序，可以到保存的文件中查看，避免返回时出错
+	stereoStore << "cameraMatrix1" << cameraMatrix1;
+	stereoStore << "cameraMatrix2" << cameraMatrix2;
+	stereoStore << "distCoeffs1" << distCoeffs1;
+	stereoStore << "distCoeffs2" << distCoeffs2;
+	stereoStore << "R" << R;
+	stereoStore << "T" << T;
+	stereoStore << "E" << E;
+	stereoStore << "F" << F;
+	stereoStore.release();
+	return true;
+}
+
+/*
+立体校正
+参数：
+stereoRectifyParams		存放立体校正结果的txt
+cameraMatrix			相机内参数
+distCoeffs				相机畸变系数
+imageSize				图像尺寸
+R						左右相机相对的旋转矩阵
+T						左右相机相对的平移向量
+R1, R2					行对齐旋转校正
+P1, P2					左右投影矩阵
+Q						重投影矩阵
+map1, map2				重投影映射表
+*/
+Rect chuixianyi::stereoRectification(const char* stereoRectifyParams, Mat& cameraMatrix1, Mat& distCoeffs1, Mat& cameraMatrix2, Mat& distCoeffs2,
+	Size& imageSize, Mat& R, Mat& T, Mat& R1, Mat& R2, Mat& P1, Mat& P2, Mat& Q, Mat& mapl1, Mat& mapl2, Mat& mapr1, Mat& mapr2)
+
+{
+	Rect validRoi[2];
+	FileStorage stereoStore(DATA_FOLDER + string(stereoRectifyParams), FileStorage::WRITE);
+	cv::stereoRectify(cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, imageSize,
+		R, T, R1, R2, P1, P2, Q, 0, -1, imageSize, &validRoi[0], &validRoi[1]);
+	// 计算左右图像的重投影映射表
+	stereoStore << "R1" << R1;
+	stereoStore << "R2" << R2;
+	stereoStore << "P1" << P1;
+	stereoStore << "P2" << P2;
+	stereoStore << "Q" << Q;
+	cout << "R1:" << endl;
+	cout << R1 << endl;
+	cout << "R2:" << endl;
+	cout << R2 << endl;
+	cout << "P1:" << endl;
+	cout << P1 << endl;
+	cout << "P2:" << endl;
+	cout << P2 << endl;
+	cout << "Q:" << endl;
+	cout << Q << endl;
+	initUndistortRectifyMap(cameraMatrix1, distCoeffs1, R1, P1, imageSize, CV_32FC1, mapl1, mapl2);
+	initUndistortRectifyMap(cameraMatrix2, distCoeffs2, R2, P2, imageSize, CV_32FC1, mapr1, mapr2);
+	//stereoStore << "mapl1" << mapl1;
+	//stereoStore << "mapl2" << mapl2;
+	//stereoStore << "mapr1" << mapr1;
+	//stereoStore << "mapr2" << mapr2;
+	stereoStore.release();
+	return validRoi[0], validRoi[1];
+}
+
+/*
+计算视差图
+参数：
+imageName1	左相机拍摄的图像
+imageName2	右相机拍摄的图像
+img1_rectified	重映射后的左侧相机图像
+img2_rectified	重映射后的右侧相机图像
+map	重投影映射表
+*/
+bool chuixianyi::computeDisparityImage(const char* imageName1, const char* imageName2, Mat& img1_rectified,
+	Mat& img2_rectified, Mat& mapl1, Mat& mapl2, Mat& mapr1, Mat& mapr2, Rect validRoi[2], Mat& disparity)
+
+{
+	// 首先，对左右相机的两张图片进行重构
+	Mat img1 = imread(string(imageName1));
+	Mat img2 = imread(string(imageName2));
+	frameLeft = img1.clone();
+	frameRight = img2.clone();
+	if (img1.empty() | img2.empty())
+	{
+		cout << "图像为空" << endl;
+	}
+	Mat gray_img1, gray_img2;
+	cvtColor(img1, gray_img1, COLOR_BGR2GRAY);
+	cvtColor(img2, gray_img2, COLOR_BGR2GRAY);
+	Mat canvas(imageSize.height, imageSize.width * 2, CV_8UC1); // 注意数据类型
+	Mat canLeft = canvas(Rect(0, 0, imageSize.width, imageSize.height));
+	Mat canRight = canvas(Rect(imageSize.width, 0, imageSize.width, imageSize.height));
+	gray_img1.copyTo(canLeft);
+	gray_img2.copyTo(canRight);
+	imwrite(DATA_FOLDER + string("校正前左右相机图像.jpg"), canvas);
+	remap(gray_img1, img1_rectified, mapl1, mapl2, INTER_LINEAR);
+	remap(gray_img2, img2_rectified, mapr1, mapr2, INTER_LINEAR);
+	imwrite(DATA_FOLDER + string("左相机校正图像.jpg"), img1_rectified);
+	imwrite(DATA_FOLDER + string("右相机校正图像.jpg"), img2_rectified);
+
+	QImage QImage1 = CvMat2QImage(img1_rectified);
+	QImage QImage2 = CvMat2QImage(img2_rectified);
+	QPixmap QPixmap1 = QPixmap::fromImage(QImage1);
+	QPixmap QPixmap2 = QPixmap::fromImage(QImage2);
+	QPixmap1 = QPixmap1.scaled(500, 400, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+	QPixmap2 = QPixmap2.scaled(500, 400, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+	ui.labelLeft->setPixmap(QPixmap1);
+	ui.labelRight->setPixmap(QPixmap2);
+
+	img1_rectified.copyTo(canLeft);
+	img2_rectified.copyTo(canRight);
+	rectangle(canLeft, validRoi[0], Scalar(255, 255, 255), 5, 8);
+	rectangle(canRight, validRoi[1], Scalar(255, 255, 255), 5, 8);
+	for (int j = 0; j <= canvas.rows; j += 16)
+		line(canvas, Point(0, j), Point(canvas.cols, j), Scalar(0, 255, 0), 1, 8);
+	imwrite(DATA_FOLDER + string("校正后左右相机图像.jpg"), canvas);
+	// 进行立体匹配
+	Ptr<StereoBM> bm = StereoBM::create(16, 9); // Ptr<>是一个智能指针
+	bm->compute(img1_rectified, img2_rectified, disparity); // 计算视差图
+	disparity.convertTo(disparity, CV_32F, 1.0 / 16);
+	// 归一化视差映射
+	normalize(disparity, disparity, 0, 256, NORM_MINMAX, -1);
+	return true;
+}
+bool chuixianyi::computeDisparityImage(Mat& img1, Mat& img2, Mat& img1_rectified,
+	Mat& img2_rectified, Mat& mapl1, Mat& mapl2, Mat& mapr1, Mat& mapr2, Rect validRoi[2], Mat& disparity)
+
+{
+	// 首先，对左右相机的两张图片进行重构
+	if (img1.empty() | img2.empty())
+	{
+		cout << "图像为空" << endl;
+	}
+	Mat gray_img1, gray_img2;
+	cvtColor(img1, gray_img1, COLOR_BGR2GRAY);
+	cvtColor(img2, gray_img2, COLOR_BGR2GRAY);
+	Mat canvas(imageSize.height, imageSize.width * 2, CV_8UC1); // 注意数据类型
+	Mat canLeft = canvas(Rect(0, 0, imageSize.width, imageSize.height));
+	Mat canRight = canvas(Rect(imageSize.width, 0, imageSize.width, imageSize.height));
+	gray_img1.copyTo(canLeft);
+	gray_img2.copyTo(canRight);
+	imwrite(DATA_FOLDER + string("校正前左右相机图像.jpg"), canvas);
+	remap(gray_img1, img1_rectified, mapl1, mapl2, INTER_LINEAR);
+	remap(gray_img2, img2_rectified, mapr1, mapr2, INTER_LINEAR);
+	imwrite(DATA_FOLDER + string("左相机校正图像.jpg"), img1_rectified);
+	imwrite(DATA_FOLDER + string("右相机校正图像.jpg"), img2_rectified);
+
+	QImage QImage1 = CvMat2QImage(img1_rectified);
+	QImage QImage2 = CvMat2QImage(img2_rectified);
+	QPixmap QPixmap1 = QPixmap::fromImage(QImage1);
+	QPixmap QPixmap2 = QPixmap::fromImage(QImage2);
+	QPixmap1 = QPixmap1.scaled(LABEL_WIDTH, LABEL_HEIGHT, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+	QPixmap2 = QPixmap2.scaled(LABEL_WIDTH, LABEL_HEIGHT, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+	ui.labelLeft->setPixmap(QPixmap1);
+	ui.labelRight->setPixmap(QPixmap2);
+
+	img1_rectified.copyTo(canLeft);
+	img2_rectified.copyTo(canRight);
+	rectangle(canLeft, validRoi[0], Scalar(255, 255, 255), 5, 8);
+	rectangle(canRight, validRoi[1], Scalar(255, 255, 255), 5, 8);
+	for (int j = 0; j <= canvas.rows; j += 16)
+		line(canvas, Point(0, j), Point(canvas.cols, j), Scalar(0, 255, 0), 1, 8);
+	imwrite(DATA_FOLDER + string("校正后左右相机图像.jpg"), canvas);
+	// 进行立体匹配
+	Ptr<StereoBM> bm = StereoBM::create(16, 9); // Ptr<>是一个智能指针
+	bm->compute(img1_rectified, img2_rectified, disparity); // 计算视差图
+	disparity.convertTo(disparity, CV_32F, 1.0 / 16);
+	// 归一化视差映射
+	normalize(disparity, disparity, 0, 256, NORM_MINMAX, -1);
+	return true;
+}
+
+//************************************
+// Description: 根据左右相机中像素坐标求解空间坐标
+// Method:    uv2xyz
+// FullName:  uv2xyz
+// Access:    public 
+// Parameter: Point2f uvLeft
+// Parameter: Point2f uvRight
+// Returns:   cv::Point3f
+//************************************
+Point3f chuixianyi::uv2xyz(Point2f uvLeft, Point2f uvRight)
+{
+	//     [u1]      [xw]                      [u2]      [xw]
+	//zc1 *|v1| = P1*[yw]                  zc2*|v2| = P2*[yw]
+	//     [ 1]      [zw]                      [ 1]      [zw]
+	//               [1 ]                                [1 ]
+	//Mat mLeftRotation = Mat(3, 3, CV_32F, leftRotation);
+	//Mat mLeftTranslation = Mat(3, 1, CV_32F, leftTranslation);
+	//Mat mLeftRT = Mat(3, 4, CV_32F);//左相机RT矩阵
+	//hconcat(mLeftRotation, mLeftTranslation, mLeftRT);
+	//Mat mLeftIntrinsic = Mat(3, 3, CV_32F, leftIntrinsic);
+	//Mat mLeftP = mLeftIntrinsic * mLeftRT;
+	Mat mLeftP = P1;
+	//cout<<"左相机P矩阵 = "<<endl<<mLeftP<<endl;
+
+	//Mat mRightRotation = Mat(3, 3, CV_32F, rightRotation);
+	//Mat mRightTranslation = Mat(3, 1, CV_32F, rightTranslation);
+	//Mat mRightRT = Mat(3, 4, CV_32F);//右相机RT矩阵
+	//hconcat(mRightRotation, mRightTranslation, mRightRT);
+	//Mat mRightIntrinsic = Mat(3, 3, CV_32F, rightIntrinsic);
+	//Mat mRightP = mRightIntrinsic * mRightRT;
+	Mat mRightP = P2;
+	//cout<<"右相机P矩阵 = "<<endl<<mRightP<<endl;
+
+	//最小二乘法A矩阵
+	Mat A = Mat(4, 3, CV_32F);
+	A.at<float>(0, 0) = uvLeft.x * mLeftP.at<double>(2, 0) - mLeftP.at<double>(0, 0);
+	A.at<float>(0, 1) = uvLeft.x * mLeftP.at<double>(2, 1) - mLeftP.at<double>(0, 1);
+	A.at<float>(0, 2) = uvLeft.x * mLeftP.at<double>(2, 2) - mLeftP.at<double>(0, 2);
+
+	A.at<float>(1, 0) = uvLeft.y * mLeftP.at<double>(2, 0) - mLeftP.at<double>(1, 0);
+	A.at<float>(1, 1) = uvLeft.y * mLeftP.at<double>(2, 1) - mLeftP.at<double>(1, 1);
+	A.at<float>(1, 2) = uvLeft.y * mLeftP.at<double>(2, 2) - mLeftP.at<double>(1, 2);
+
+	A.at<float>(2, 0) = uvRight.x * mRightP.at<double>(2, 0) - mRightP.at<double>(0, 0);
+	A.at<float>(2, 1) = uvRight.x * mRightP.at<double>(2, 1) - mRightP.at<double>(0, 1);
+	A.at<float>(2, 2) = uvRight.x * mRightP.at<double>(2, 2) - mRightP.at<double>(0, 2);
+
+	A.at<float>(3, 0) = uvRight.y * mRightP.at<double>(2, 0) - mRightP.at<double>(1, 0);
+	A.at<float>(3, 1) = uvRight.y * mRightP.at<double>(2, 1) - mRightP.at<double>(1, 1);
+	A.at<float>(3, 2) = uvRight.y * mRightP.at<double>(2, 2) - mRightP.at<double>(1, 2);
+
+	//最小二乘法B矩阵
+	Mat B = Mat(4, 1, CV_32F);
+	B.at<float>(0, 0) = mLeftP.at<double>(0, 3) - uvLeft.x * mLeftP.at<double>(2, 3);
+	B.at<float>(1, 0) = mLeftP.at<double>(1, 3) - uvLeft.y * mLeftP.at<double>(2, 3);
+	B.at<float>(2, 0) = mRightP.at<double>(0, 3) - uvRight.x * mRightP.at<double>(2, 3);
+	B.at<float>(3, 0) = mRightP.at<double>(1, 3) - uvRight.y * mRightP.at<double>(2, 3);
+
+	Mat XYZ = Mat(3, 1, CV_32F);
+	//采用SVD最小二乘法求解XYZ
+	solve(A, B, XYZ, DECOMP_SVD);
+
+	//cout<<"空间坐标为 = "<<endl<<XYZ<<endl;
+
+	//世界坐标系中坐标
+	Point3f world;
+	world.x = XYZ.at<float>(0, 0);
+	world.y = XYZ.at<float>(1, 0);
+	world.z = XYZ.at<float>(2, 0);
+
+	return world;
+}
+
+
+
+
+
+//******************************************************************
+//
+//
+//					激光平面标定和测量
+//
+// 读取标定的图片->提取激光光条中心点的图像坐标->读取标定板的Zw值
+// ->求标定板上激光特征点的XwYw坐标->最小二乘法拟合激光平面参数
+//
+// 标定的图片尽量不要有反光，会导致用灰度重心法求的中心点偏移太大
+//
+//
+//******************************************************************
+void chuixianyi::on_planeCalibrateBtn_clicked()
+{
+	//读取相机标定的数据
+	//校正图片
+
+	readRectifyParams(); // 读取了左右相机投影矩阵P1,P2
+
+
+	vector<Point> rayLinePoints_L;
+	vector<int> zws;
+	ifstream imageStore(DATA_FOLDER + string(imageList_L_rayLine)); // 打开存放标定图片名称的txt
+	FileStorage rayLineStore(DATA_FOLDER + string(rayLineCalibrate_result_L), FileStorage::WRITE);
+	string imageName; // 读取的标定图片的名称
+	while (getline(imageStore, imageName)) // 读取txt的每一行（每一行存放了一张标定图片的名称）
+	{
+		srcImage = imread(LEFT_FOLDER + imageName);
+		int zw;
+		string zw_str = "";	// 通过图片文件名，读取zw数据		left00_10.jpg
+		for (int i = 7; i < imageName.size(); ++i)
+		{
+			char c = imageName[i];
+			if (c == '.')
+				break;
+			zw_str += c;
+		}
+		zw = atoi(zw_str.c_str());
+
+		vector<Point> tempPoints;
+		tempPoints = getRayLinePoints();
+		for each (Point var in tempPoints)
+		{
+			rayLinePoints_L.push_back(var);
+			zws.push_back(zw);
+		}
+	}
+
+
+	int m = rayLinePoints_L.size();
+	L = Mat::ones(m, 1, CV_32FC1);
+	G = Mat(m, 3, CV_32FC1);
+	S = Mat(3, 1, CV_32FC1);
+
+	for (int i = 0; i < G.rows; ++i)
+	{
+		Point2f xwyw = uvzw2xwyw(rayLinePoints_L[i], zws[i], projectionMatrix_L);
+		G.at<float>(i, 0) = xwyw.x;
+		G.at<float>(i, 0) = xwyw.y;
+		G.at<float>(i, 0) = zws[i];
+	}
+
+	solve(G, L, S, DECOMP_SVD);
+	float A = S.at<float>(0, 0);
+	float B = S.at<float>(1, 0);
+	float C = S.at<float>(2, 0);
+
+	rayLineStore << "A" << A;
+	rayLineStore << "B" << B;
+	rayLineStore << "C" << C;
+	rayLineStore.release();
+}
+
+//提取激光光条中心点
+//输入：srcImage	默认BGR彩色图像
+//输出：rayLinePoints	激光光条中心点的图像坐标uv
+//		rayLineImage.jpg	激光光条图像
+vector<Point> chuixianyi::getRayLinePoints()
+{
+	vector<Point> rayLinePoints;
+
+	cvtColor(srcImage, grayImage, COLOR_BGR2GRAY);
+	imwrite(DATA_FOLDER + string("grayImage.jpg"), grayImage);
+	vector<Mat> BGR;
+	split(srcImage, BGR);//opencv读取图像是BGR的
+	redImage = BGR.at(2).clone();//取出BGR中的R分量
+	imwrite(DATA_FOLDER + string("redImage.jpg"), redImage);
+	for (int i = 0; i < redImage.rows; ++i)
+		for (int j = 0; j < redImage.cols; ++j)
+		{
+			int v = redImage.at<uchar>(i, j);
+			redImage.at<uchar>(i, j) = v > T_rayLine ? v : 0;
+		}
+	imwrite(DATA_FOLDER + string("thresholdImage.jpg"), redImage);
+
+	//激光线是横着的，所以扫描列
+	int num = 9;
+	int max_red, max_gray;
+	cv::Point ij_red, ij_gray;
+	vector<int> maxs_red, maxs_gray;
+	vector<cv::Point> ijs_red, ijs_gray;
+	for (int j = 0; j < redImage.cols; ++j)
+	{
+		//找到redImage这一列中灰度最大的点
+		max_red = redImage.at<uchar>(0, j);
+		ij_red.x = 0;
+		ij_red.y = j;
+		for (int i = 0; i < redImage.rows; ++i)
+		{
+			if (redImage.at<uchar>(i, j) > max_red)
+			{
+				max_red = redImage.at<uchar>(i, j);
+				ij_red.x = i;
+				ij_red.y = j;
+			}
+		}
+		if (max_red == 0)
+			continue;
+		//找到redImage这一列的候选点
+		for (int i = 0; i < redImage.rows; ++i)
+		{
+			if (redImage.at<uchar>(i, j) > max_red - redtolerant)
+			{
+				maxs_red.push_back(redImage.at<uchar>(i, j));
+				ijs_red.push_back(cv::Point(i, j));
+			}
+		}
+
+
+		//将redImage中候选点对应到grayImage，找到候选点中灰度值最大的点
+		max_gray = grayImage.at<uchar>(ij_red.x, ij_red.y);
+		ij_gray = ij_red;
+		for (int i = 0; i < ijs_red.size(); ++i)
+		{
+			if (grayImage.at<uchar>(ij_red.x, ij_red.y) > max_gray)
+			{
+				max_gray = grayImage.at<uchar>(ij_red.x, ij_red.y);
+				ij_gray.x = i;
+				ij_gray.y = j;
+			}
+		}
+
+		//找到grayImage这一列的候选点
+		for (int i = 0; i < grayImage.rows; ++i)
+		{
+			if (grayImage.at<uchar>(i, j) > max_gray - graytolerant)
+			{
+				maxs_gray.push_back(grayImage.at<uchar>(i, j));
+				ijs_gray.push_back(cv::Point(i, j));
+			}
+		}
+		//控制候选点个数不超过9个
+		if (maxs_gray.size() > num)
+		{
+			
+
+		}
+
+
+		//求候选点的灰度重心，作为激光中心点的坐标
+		double u, v;
+		int fenzi1 = 0, fenzi2 = 0, fenmu = 0;
+		for (int i = 0; i < ijs_gray.size(); ++i)
+		{
+			fenzi1 += ijs_gray[i].x*grayImage.at<uchar>(ij_red.x, ij_red.y);
+			//fenzi2 += ijs_gray[i].y*grayImage.at<uchar>(ij_red.x, ij_red.y);
+			fenmu += grayImage.at<uchar>(ij_red.x, ij_red.y);
+		}
+		u = fenzi1 / fenmu;
+		//v = fenzi2 / fenmu;
+		v = j;
+		rayLinePoints.push_back(cv::Point(u, v));
+
+
+		maxs_red.clear();
+		maxs_gray.clear();
+		ijs_red.clear();
+		ijs_gray.clear();
+	}
+
+	rayLineImage = Mat::zeros(srcImage.rows, srcImage.cols, CV_8UC1);
+	for (int i = 0; i < rayLinePoints.size(); ++i)
+		rayLineImage.at<uchar>(rayLinePoints[i].x, rayLinePoints[i].y) = 255;
+	imwrite(DATA_FOLDER + string("rayLineImage.jpg"), rayLineImage);
+
+	return rayLinePoints;
+}
+
+Point2f chuixianyi::uvzw2xwyw(Point uv, float zw, Mat &P)
+{
+	//     [u1]      [xw]                      [u2]      [xw]
+	//zc1 *|v1| = P1*[yw]                  zc2*|v2| = P2*[yw]
+	//     [ 1]      [zw]                      [ 1]      [zw]
+	//               [1 ]                                [1 ]
+	//
+	//其中mij为投影矩阵P每一项的值
+	//[xw]=[um31-m11 um32-m22]-1 * [m14-um34-(um33-m13)zw]
+	//[yw] [vm31-m11 vm32-m22]     [m24-vm34-(vm33-m23)zw]
+
+
+	Mat m = Mat_<float>(2, 2);
+	m.at<float>(0, 0) = uv.x*P.at<double>(2, 0) - P.at<double>(0, 0);
+	m.at<float>(0, 1) = uv.x*P.at<double>(2, 1) - P.at<double>(1, 1);
+	m.at<float>(1, 0) = uv.y*P.at<double>(2, 0) - P.at<double>(0, 0);
+	m.at<float>(0, 0) = uv.y*P.at<double>(2, 1) - P.at<double>(1, 1);
+	Mat m1 = Mat_<float>(2, 2);
+	m1 = m.inv();
+	//invert(m, m1);
+
+	//float m11 = m1.at<float>(0, 0);
+	//float m12 = m1.at<float>(0, 1);
+	//float m21 = m1.at<float>(1, 0);
+	//float m22 = m1.at<float>(1, 1);
+
+	float xw = m1.at<float>(0, 0)*(P.at<double>(0, 3) - uv.x*P.at<double>(2, 3) - (uv.x*P.at<double>(2, 2) - P.at<double>(0, 2))*zw)
+		+ m1.at<float>(0, 1)*(P.at<double>(1, 3) - uv.y*P.at<double>(2, 3) - (uv.y*P.at<double>(2, 2) - P.at<double>(1, 2))*zw);
+	float yw = m1.at<float>(1, 0)*(P.at<double>(0, 3) - uv.y*P.at<double>(2, 3) - (uv.y*P.at<double>(2, 2) - P.at<double>(0, 2))*zw)
+		+ m1.at<float>(1, 1)*(P.at<double>(1, 3) - uv.y*P.at<double>(2, 3) - (uv.y*P.at<double>(2, 2) - P.at<double>(1, 2))*zw);
+
+	return Point2f(xw, yw);
+}
+
+
+
+
+
+
+//******************************************************************
+//
+//
+//					图像处理部分
+//
+// 预处理->提取激光线->提取垂线->相交，计算交点的图像坐标->计算垂线XY坐标
+// ->特征匹配->双目视觉计算垂线Z坐标
+//
+//******************************************************************
 void chuixianyi::on_autoMatchBtn_clicked()
 {
 	//测量按钮点击一次开始测量，再次点击就退出测量
@@ -799,7 +1517,7 @@ void chuixianyi::on_autoMatchBtn_clicked()
 	fs.close();
 	ui.textBrowser->append(QString::fromLocal8Bit("已写入匹配点的三维坐标!"));
 	QCoreApplication::processEvents();
-	
+
 
 
 
@@ -842,8 +1560,8 @@ void chuixianyi::on_autoMatchBtn_clicked()
 
 
 
-	
-	
+
+
 	//ORB算子	BF特征匹配
 
 	////初始化
@@ -1014,6 +1732,7 @@ void chuixianyi::on_detectCrossBtn_clicked()
 	ui.textBrowser->append(QString::fromLocal8Bit("已检测激光光条中心!"));
 	QCoreApplication::processEvents();
 }
+
 
 void chuixianyi::GetRedComponetBySplit(Mat srcImg, Mat &red)
 {
@@ -1250,476 +1969,9 @@ void chuixianyi::Delete_smallregions(Mat & pSrc, Mat & pDst)
 
 
 
-void chuixianyi::readRectifyParams()
-{
-	FileStorage stereoStore(DATA_FOLDER + string(stereoCalibrate_result_L), FileStorage::READ);
-	stereoStore["cameraMatrix1"] >> cameraMatrix_L;
-	stereoStore["cameraMatrix2"] >> cameraMatrix_R;
-	stereoStore["distCoeffs1"] >> distCoeffs_L;
-	stereoStore["distCoeffs2"] >> distCoeffs_R;
-	stereoStore["R"] >> R;
-	stereoStore["T"] >> T;
-	stereoStore["E"] >> E;
-	stereoStore["F"] >> F;
-	stereoStore.release();
-
-	FileStorage stereoParamsStore(DATA_FOLDER + string(stereoRectifyParams), FileStorage::READ);
-	stereoParamsStore["R1"] >> R1;
-	stereoParamsStore["R2"] >> R2;
-	stereoParamsStore["P1"] >> P1;
-	stereoParamsStore["P2"] >> P2;
-	stereoParamsStore["Q"] >> Q;
-	//stereoParamsStore["mapl1"] >> mapl1;
-	//stereoParamsStore["mapl2"] >> mapl2;
-	//stereoParamsStore["mapr1"] >> mapr1;
-	//stereoParamsStore["mapr2"] >> mapr2;
-	stereoParamsStore.release();
 
 
-	validRoi[0], validRoi[1] = stereoRectification(stereoRectifyParams, cameraMatrix_L, distCoeffs_L, cameraMatrix_R, distCoeffs_R,
-		imageSize, R, T, R1, R2, P1, P2, Q, mapl1, mapl2, mapr1, mapr2);
-	ui.textBrowser->append(QString::fromLocal8Bit("已读取相机标定数据!"));
-	QCoreApplication::processEvents();
-}
-
-void chuixianyi::prepareFrameLR()
-{
-	if (flagStartCamera && !flagEndCamera)
-	{
-		//摄像头画面静止
-		timer->stop();
-		Size size(IMAGE_WIDTH, IMAGE_HEIGHT);
-
-		PvImage *alInputImage = alBuffer->GetImage();
-		alInputImage->Alloc(IMAGE_WIDTH, IMAGE_HEIGHT, PvPixelMono8);
-		Mat lMat(size, CV_8UC1, alInputImage->GetDataPointer());
-		cvtColor(lMat, frameLeft, COLOR_RGB2BGR);
-
-		PvImage *blInputImage = blBuffer->GetImage();
-		blInputImage->Alloc(IMAGE_WIDTH, IMAGE_HEIGHT, PvPixelMono8);
-		Mat rMat(size, CV_8UC1, blInputImage->GetDataPointer());
-		cvtColor(rMat, frameRight, COLOR_RGB2BGR);
-
-
-		ui.textBrowser->append(QString::fromLocal8Bit("已捕捉摄像头画面!"));
-		QCoreApplication::processEvents();
-	}
-}
-
-
-//************************************
-// Description: 根据左右相机中像素坐标求解空间坐标
-// Method:    uv2xyz
-// FullName:  uv2xyz
-// Access:    public 
-// Parameter: Point2f uvLeft
-// Parameter: Point2f uvRight
-// Returns:   cv::Point3f
-// Author:    小白
-// Date:      2017/01/10
-// History:
-//************************************
-Point3f chuixianyi::uv2xyz(Point2f uvLeft, Point2f uvRight)
-{
-	//     [u1]      [xw]                      [u2]      [xw]
-	//zc1 *|v1| = Pl*[yw]                  zc2*|v2| = P2*[yw]
-	//     [ 1]      [zw]                      [ 1]      [zw]
-	//               [1 ]                                [1 ]
-	//Mat mLeftRotation = Mat(3, 3, CV_32F, leftRotation);
-	//Mat mLeftTranslation = Mat(3, 1, CV_32F, leftTranslation);
-	//Mat mLeftRT = Mat(3, 4, CV_32F);//左相机RT矩阵
-	//hconcat(mLeftRotation, mLeftTranslation, mLeftRT);
-	//Mat mLeftIntrinsic = Mat(3, 3, CV_32F, leftIntrinsic);
-	//Mat mLeftP = mLeftIntrinsic * mLeftRT;
-	Mat mLeftP = P1;
-	//cout<<"左相机P矩阵 = "<<endl<<mLeftP<<endl;
-
-	//Mat mRightRotation = Mat(3, 3, CV_32F, rightRotation);
-	//Mat mRightTranslation = Mat(3, 1, CV_32F, rightTranslation);
-	//Mat mRightRT = Mat(3, 4, CV_32F);//右相机RT矩阵
-	//hconcat(mRightRotation, mRightTranslation, mRightRT);
-	//Mat mRightIntrinsic = Mat(3, 3, CV_32F, rightIntrinsic);
-	//Mat mRightP = mRightIntrinsic * mRightRT;
-	Mat mRightP = P2;
-	//cout<<"右相机P矩阵 = "<<endl<<mRightP<<endl;
-
-	//最小二乘法A矩阵
-	Mat A = Mat(4, 3, CV_32F);
-	A.at<float>(0, 0) = uvLeft.x * mLeftP.at<double>(2, 0) - mLeftP.at<double>(0, 0);
-	A.at<float>(0, 1) = uvLeft.x * mLeftP.at<double>(2, 1) - mLeftP.at<double>(0, 1);
-	A.at<float>(0, 2) = uvLeft.x * mLeftP.at<double>(2, 2) - mLeftP.at<double>(0, 2);
-
-	A.at<float>(1, 0) = uvLeft.y * mLeftP.at<double>(2, 0) - mLeftP.at<double>(1, 0);
-	A.at<float>(1, 1) = uvLeft.y * mLeftP.at<double>(2, 1) - mLeftP.at<double>(1, 1);
-	A.at<float>(1, 2) = uvLeft.y * mLeftP.at<double>(2, 2) - mLeftP.at<double>(1, 2);
-
-	A.at<float>(2, 0) = uvRight.x * mRightP.at<double>(2, 0) - mRightP.at<double>(0, 0);
-	A.at<float>(2, 1) = uvRight.x * mRightP.at<double>(2, 1) - mRightP.at<double>(0, 1);
-	A.at<float>(2, 2) = uvRight.x * mRightP.at<double>(2, 2) - mRightP.at<double>(0, 2);
-
-	A.at<float>(3, 0) = uvRight.y * mRightP.at<double>(2, 0) - mRightP.at<double>(1, 0);
-	A.at<float>(3, 1) = uvRight.y * mRightP.at<double>(2, 1) - mRightP.at<double>(1, 1);
-	A.at<float>(3, 2) = uvRight.y * mRightP.at<double>(2, 2) - mRightP.at<double>(1, 2);
-
-	//最小二乘法B矩阵
-	Mat B = Mat(4, 1, CV_32F);
-	B.at<float>(0, 0) = mLeftP.at<double>(0, 3) - uvLeft.x * mLeftP.at<double>(2, 3);
-	B.at<float>(1, 0) = mLeftP.at<double>(1, 3) - uvLeft.y * mLeftP.at<double>(2, 3);
-	B.at<float>(2, 0) = mRightP.at<double>(0, 3) - uvRight.x * mRightP.at<double>(2, 3);
-	B.at<float>(3, 0) = mRightP.at<double>(1, 3) - uvRight.y * mRightP.at<double>(2, 3);
-
-	Mat XYZ = Mat(3, 1, CV_32F);
-	//采用SVD最小二乘法求解XYZ
-	solve(A, B, XYZ, DECOMP_SVD);
-
-	//cout<<"空间坐标为 = "<<endl<<XYZ<<endl;
-
-	//世界坐标系中坐标
-	Point3f world;
-	world.x = XYZ.at<float>(0, 0);
-	world.y = XYZ.at<float>(1, 0);
-	world.z = XYZ.at<float>(2, 0);
-
-	return world;
-}
-
-
-/*
-单目标定
-参数：
-imageList		存放标定图片名称的txt
-singleCalibrateResult	存放标定结果的txt
-objectPoints	世界坐标系中点的坐标
-corners_seq		存放图像中的角点,用于立体标定
-cameraMatrix	相机的内参数矩阵
-distCoeffs		相机的畸变系数
-imageSize		输入图像的尺寸（像素）
-patternSize		标定板每行的角点个数, 标定板每列的角点个数 (15, 9)
-chessboardSize	棋盘上每个方格的边长（mm）
-注意：亚像素精确化时，允许输入单通道，8位或者浮点型图像。由于输入图像的类型不同，下面用作标定函数参数的内参数矩阵和畸变系数矩阵在初始化时也要数据注意类型。
-*/
-bool chuixianyi::singleCameraCalibrate(const char* imageFolder, const char* imageList, const char* singleCalibrateResult, vector<vector<Point3f>>& objectPoints,
-	vector<vector<Point2f>>& corners_seq, Mat& cameraMatrix, Mat& distCoeffs, Size& imageSize, Size patternSize, Size chessboardSize)
-
-{
-	int n_boards = 0;
-	ifstream imageStore(DATA_FOLDER + string(imageList)); // 打开存放标定图片名称的txt
-	FileStorage resultStore(DATA_FOLDER + string(singleCalibrateResult), FileStorage::WRITE);
-	//ofstream resultStore(DATA_FOLDER + string(singleCalibrateResult)); // 保存标定结果的txt
-	// 开始提取角点坐标
-	vector<Point2f> corners; // 存放一张图片的角点坐标 
-	string imageName; // 读取的标定图片的名称
-	while (getline(imageStore, imageName)) // 读取txt的每一行（每一行存放了一张标定图片的名称）
-	{
-		n_boards++;
-		Mat imageInput = imread(imageFolder + imageName);
-		cvtColor(imageInput, imageInput, COLOR_RGB2GRAY);
-		imageSize.width = imageInput.cols; // 获取图片的宽度
-		imageSize.height = imageInput.rows; // 获取图片的高度
-											// 查找标定板的角点
-		bool found = findChessboardCorners(imageInput, patternSize, corners); // 最后一个参数int flags的缺省值为：CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_NORMALIZE_IMAGE
-																			  // 亚像素精确化。在findChessboardCorners中自动调用了cornerSubPix，为了更加精细化，我们自己再调用一次。
-		if (found) // 当所有的角点都被找到
-		{
-			TermCriteria criteria = TermCriteria(TermCriteria::Type::EPS + TermCriteria::Type::MAX_ITER, 40, 0.001); // 终止标准，迭代40次或者达到0.001的像素精度
-			cornerSubPix(imageInput, corners, Size(11, 11), Size(-1, -1), criteria);// 由于我们的图像只存较大，将搜索窗口调大一些，（11， 11）为真实窗口的一半，真实大小为（11*2+1， 11*2+1）--（23， 23）
-			corners_seq.push_back(corners); // 存入角点序列
-											// 绘制角点
-											//drawChessboardCorners(imageInput, patternSize, corners, true);
-											//imshow("cornersframe", imageInput);
-											//waitKey(500); // 暂停0.5s
-
-			Mat imageCorners = imageInput.clone();
-			cvtColor(imageCorners, imageCorners, COLOR_GRAY2RGB);
-			drawChessboardCorners(imageCorners, patternSize, corners, true);
-			string cornersName = "corners_" + imageName;
-			imwrite(DATA_FOLDER + string("corners\\") + cornersName, imageCorners);
-		}
-	}
-	//destroyWindow("cornersframe");
-	// 进行相机标定
-	// 计算角点对应的三维坐标
-	int pic, i, j;
-	for (pic = 0; pic < n_boards; pic++)
-	{
-		vector<Point3f> realPointSet;
-		for (i = 0; i < patternSize.height; i++)
-		{
-			for (j = 0; j < patternSize.width; j++)
-			{
-				Point3f realPoint;
-				// 假设标定板位于世界坐标系Z=0的平面
-				realPoint.x = j * chessboardSize.width;
-				realPoint.y = i * chessboardSize.height;
-				realPoint.z = 0;
-				realPointSet.push_back(realPoint);
-			}
-		}
-		objectPoints.push_back(realPointSet);
-	}
-	// 执行标定程序
-	vector<Mat> rvec; // 旋转向量
-	vector<Mat> tvec; // 平移向量
-	cv::calibrateCamera(objectPoints, corners_seq, imageSize, cameraMatrix, distCoeffs, rvec, tvec, 0);
-	// 保存标定结果
-	resultStore << "cameraMatrix" << cameraMatrix;//相机内参数矩阵
-	resultStore << "distCoeffs" << distCoeffs;//相机畸变系数
-											  // 计算重投影点，与原图角点比较，得到误差
-	double errPerImage = 0.; // 每张图像的误差
-	double errAverage = 0.; // 所有图像的平均误差
-	double totalErr = 0.; // 误差总和
-	vector<Point2f> projectImagePoints; // 重投影点
-	for (i = 0; i < n_boards; i++)
-	{
-		vector<Point3f> tempObjectPoints = objectPoints[i]; // 临时三维点
-															// 计算重投影点
-		projectPoints(tempObjectPoints, rvec[i], tvec[i], cameraMatrix, distCoeffs, projectImagePoints);
-		// 计算新的投影点与旧的投影点之间的误差
-		vector<Point2f> tempCornersPoints = corners_seq[i];// 临时存放旧投影点
-		Mat tempCornersPointsMat = Mat(1, tempCornersPoints.size(), CV_32FC2); // 定义成两个通道的Mat是为了计算误差
-		Mat projectImagePointsMat = Mat(1, projectImagePoints.size(), CV_32FC2);
-		// 赋值
-		for (int j = 0; j < tempCornersPoints.size(); j++)
-		{
-			projectImagePointsMat.at<Vec2f>(0, j) = Vec2f(projectImagePoints[j].x, projectImagePoints[j].y);
-			tempCornersPointsMat.at<Vec2f>(0, j) = Vec2f(tempCornersPoints[j].x, tempCornersPoints[j].y);
-		}
-		// opencv里的norm函数其实把这里的两个通道分别分开来计算的(X1-X2)^2的值，然后统一求和，最后进行根号
-		errPerImage = norm(tempCornersPointsMat, projectImagePointsMat, NORM_L2) / (patternSize.width * patternSize.height);
-		totalErr += errPerImage;
-		//resultStore << "No." + to_string(i + 1) + "errPerImage" << errPerImage;
-	}
-	//resultStore << "totalErr/n_boards" << totalErr / n_boards;
-	imageStore.close();
-	resultStore.release();
-	return true;
-}
-
-/*
-双目标定:计算两摄像机相对旋转矩阵 R,平移向量 T, 本征矩阵E, 基础矩阵F
-参数：
-stereoCalibrateResult	存放立体标定结果的txt
-objectPoints			三维点
-imagePoints				二维图像上的点
-cameraMatrix			相机内参数
-distCoeffs				相机畸变系数
-imageSize				图像尺寸
-R		左右相机相对的旋转矩阵
-T		左右相机相对的平移向量
-E		本征矩阵
-F		基础矩阵
-*/
-bool chuixianyi::stereoCalibrate(const char* stereoCalibrateResult, vector<vector<Point3f>> objectPoints, vector<vector<Point2f>> imagePoints1, vector<vector<Point2f>> imagePoints2,
-	Mat& cameraMatrix1, Mat& distCoeffs1, Mat& cameraMatrix2, Mat& distCoeffs2, Size& imageSize, Mat& R, Mat& T, Mat& E, Mat& F)
-
-{
-	//ofstream stereoStore(DATA_FOLDER + string(stereoCalibrateResult));
-	FileStorage stereoStore(DATA_FOLDER + string(stereoCalibrateResult), FileStorage::WRITE);
-	TermCriteria criteria = TermCriteria(TermCriteria::COUNT | TermCriteria::EPS, 30, 1e-6); // 终止条件
-	cv::stereoCalibrate(objectPoints, imagePoints1, imagePoints2, cameraMatrix1, distCoeffs1,
-		cameraMatrix2, distCoeffs2, imageSize, R, T, E, F, CALIB_FIX_INTRINSIC, criteria); // 注意参数顺序，可以到保存的文件中查看，避免返回时出错
-	stereoStore << "cameraMatrix1" << cameraMatrix1;
-	stereoStore << "cameraMatrix2" << cameraMatrix2;
-	stereoStore << "distCoeffs1" << distCoeffs1;
-	stereoStore << "distCoeffs2" << distCoeffs2;
-	stereoStore << "R" << R;
-	stereoStore << "T" << T;
-	stereoStore << "E" << E;
-	stereoStore << "F" << F;
-	stereoStore.release();
-	return true;
-}
-
-/*
-立体校正
-参数：
-stereoRectifyParams	存放立体校正结果的txt
-cameraMatrix			相机内参数
-distCoeffs				相机畸变系数
-imageSize				图像尺寸
-R						左右相机相对的旋转矩阵
-T						左右相机相对的平移向量
-R1, R2					行对齐旋转校正
-P1, P2					左右投影矩阵
-Q						重投影矩阵
-map1, map2				重投影映射表
-*/
-Rect chuixianyi::stereoRectification(const char* stereoRectifyParams, Mat& cameraMatrix1, Mat& distCoeffs1, Mat& cameraMatrix2, Mat& distCoeffs2,
-	Size& imageSize, Mat& R, Mat& T, Mat& R1, Mat& R2, Mat& P1, Mat& P2, Mat& Q, Mat& mapl1, Mat& mapl2, Mat& mapr1, Mat& mapr2)
-
-{
-	Rect validRoi[2];
-	//ofstream stereoStore(DATA_FOLDER + string(stereoRectifyParams));
-	FileStorage stereoStore(DATA_FOLDER + string(stereoRectifyParams), FileStorage::WRITE);
-	cv::stereoRectify(cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, imageSize,
-		R, T, R1, R2, P1, P2, Q, 0, -1, imageSize, &validRoi[0], &validRoi[1]);
-	// 计算左右图像的重投影映射表
-	stereoStore << "R1" << R1;
-	stereoStore << "R2" << R2;
-	stereoStore << "P1" << P1;
-	stereoStore << "P2" << P2;
-	stereoStore << "Q" << Q;
-	cout << "R1:" << endl;
-	cout << R1 << endl;
-	cout << "R2:" << endl;
-	cout << R2 << endl;
-	cout << "P1:" << endl;
-	cout << P1 << endl;
-	cout << "P2:" << endl;
-	cout << P2 << endl;
-	cout << "Q:" << endl;
-	cout << Q << endl;
-	initUndistortRectifyMap(cameraMatrix1, distCoeffs1, R1, P1, imageSize, CV_32FC1, mapl1, mapl2);
-	initUndistortRectifyMap(cameraMatrix2, distCoeffs2, R2, P2, imageSize, CV_32FC1, mapr1, mapr2);
-	//stereoStore << "mapl1" << mapl1;
-	//stereoStore << "mapl2" << mapl2;
-	//stereoStore << "mapr1" << mapr1;
-	//stereoStore << "mapr2" << mapr2;
-	stereoStore.release();
-	return validRoi[0], validRoi[1];
-}
-
-/*
-计算视差图
-参数：
-imageName1	左相机拍摄的图像
-imageName2	右相机拍摄的图像
-img1_rectified	重映射后的左侧相机图像
-img2_rectified	重映射后的右侧相机图像
-map	重投影映射表
-*/
-bool chuixianyi::computeDisparityImage(const char* imageName1, const char* imageName2, Mat& img1_rectified,
-	Mat& img2_rectified, Mat& mapl1, Mat& mapl2, Mat& mapr1, Mat& mapr2, Rect validRoi[2], Mat& disparity)
-
-{
-	// 首先，对左右相机的两张图片进行重构
-	Mat img1 = imread(string(imageName1));
-	Mat img2 = imread(string(imageName2));
-	frameLeft = img1.clone();
-	frameRight = img2.clone();
-	if (img1.empty() | img2.empty())
-	{
-		cout << "图像为空" << endl;
-	}
-	Mat gray_img1, gray_img2;
-	cvtColor(img1, gray_img1, COLOR_BGR2GRAY);
-	cvtColor(img2, gray_img2, COLOR_BGR2GRAY);
-	Mat canvas(imageSize.height, imageSize.width * 2, CV_8UC1); // 注意数据类型
-	Mat canLeft = canvas(Rect(0, 0, imageSize.width, imageSize.height));
-	Mat canRight = canvas(Rect(imageSize.width, 0, imageSize.width, imageSize.height));
-	gray_img1.copyTo(canLeft);
-	gray_img2.copyTo(canRight);
-	imwrite(DATA_FOLDER + string("校正前左右相机图像.jpg"), canvas);
-	remap(gray_img1, img1_rectified, mapl1, mapl2, INTER_LINEAR);
-	remap(gray_img2, img2_rectified, mapr1, mapr2, INTER_LINEAR);
-	imwrite(DATA_FOLDER + string("左相机校正图像.jpg"), img1_rectified);
-	imwrite(DATA_FOLDER + string("右相机校正图像.jpg"), img2_rectified);
-
-	QImage QImage1 = CvMat2QImage(img1_rectified);
-	QImage QImage2 = CvMat2QImage(img2_rectified);
-	QPixmap QPixmap1 = QPixmap::fromImage(QImage1);
-	QPixmap QPixmap2 = QPixmap::fromImage(QImage2);
-	QPixmap1 = QPixmap1.scaled(500, 400, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-	QPixmap2 = QPixmap2.scaled(500, 400, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-	ui.labelLeft->setPixmap(QPixmap1);
-	ui.labelRight->setPixmap(QPixmap2);
-
-	img1_rectified.copyTo(canLeft);
-	img2_rectified.copyTo(canRight);
-	rectangle(canLeft, validRoi[0], Scalar(255, 255, 255), 5, 8);
-	rectangle(canRight, validRoi[1], Scalar(255, 255, 255), 5, 8);
-	for (int j = 0; j <= canvas.rows; j += 16)
-		line(canvas, Point(0, j), Point(canvas.cols, j), Scalar(0, 255, 0), 1, 8);
-	imwrite(DATA_FOLDER + string("校正后左右相机图像.jpg"), canvas);
-	// 进行立体匹配
-	Ptr<StereoBM> bm = StereoBM::create(16, 9); // Ptr<>是一个智能指针
-	bm->compute(img1_rectified, img2_rectified, disparity); // 计算视差图
-	disparity.convertTo(disparity, CV_32F, 1.0 / 16);
-	// 归一化视差映射
-	normalize(disparity, disparity, 0, 256, NORM_MINMAX, -1);
-	return true;
-}
-bool chuixianyi::computeDisparityImage(Mat& img1, Mat& img2, Mat& img1_rectified,
-	Mat& img2_rectified, Mat& mapl1, Mat& mapl2, Mat& mapr1, Mat& mapr2, Rect validRoi[2], Mat& disparity)
-
-{
-	// 首先，对左右相机的两张图片进行重构
-	if (img1.empty() | img2.empty())
-	{
-		cout << "图像为空" << endl;
-	}
-	Mat gray_img1, gray_img2;
-	cvtColor(img1, gray_img1, COLOR_BGR2GRAY);
-	cvtColor(img2, gray_img2, COLOR_BGR2GRAY);
-	Mat canvas(imageSize.height, imageSize.width * 2, CV_8UC1); // 注意数据类型
-	Mat canLeft = canvas(Rect(0, 0, imageSize.width, imageSize.height));
-	Mat canRight = canvas(Rect(imageSize.width, 0, imageSize.width, imageSize.height));
-	gray_img1.copyTo(canLeft);
-	gray_img2.copyTo(canRight);
-	imwrite(DATA_FOLDER + string("校正前左右相机图像.jpg"), canvas);
-	remap(gray_img1, img1_rectified, mapl1, mapl2, INTER_LINEAR);
-	remap(gray_img2, img2_rectified, mapr1, mapr2, INTER_LINEAR);
-	imwrite(DATA_FOLDER + string("左相机校正图像.jpg"), img1_rectified);
-	imwrite(DATA_FOLDER + string("右相机校正图像.jpg"), img2_rectified);
-
-	QImage QImage1 = CvMat2QImage(img1_rectified);
-	QImage QImage2 = CvMat2QImage(img2_rectified);
-	QPixmap QPixmap1 = QPixmap::fromImage(QImage1);
-	QPixmap QPixmap2 = QPixmap::fromImage(QImage2);
-	QPixmap1 = QPixmap1.scaled(LABEL_WIDTH, LABEL_HEIGHT, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-	QPixmap2 = QPixmap2.scaled(LABEL_WIDTH, LABEL_HEIGHT, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-	ui.labelLeft->setPixmap(QPixmap1);
-	ui.labelRight->setPixmap(QPixmap2);
-
-	img1_rectified.copyTo(canLeft);
-	img2_rectified.copyTo(canRight);
-	rectangle(canLeft, validRoi[0], Scalar(255, 255, 255), 5, 8);
-	rectangle(canRight, validRoi[1], Scalar(255, 255, 255), 5, 8);
-	for (int j = 0; j <= canvas.rows; j += 16)
-		line(canvas, Point(0, j), Point(canvas.cols, j), Scalar(0, 255, 0), 1, 8);
-	imwrite(DATA_FOLDER + string("校正后左右相机图像.jpg"), canvas);
-	// 进行立体匹配
-	Ptr<StereoBM> bm = StereoBM::create(16, 9); // Ptr<>是一个智能指针
-	bm->compute(img1_rectified, img2_rectified, disparity); // 计算视差图
-	disparity.convertTo(disparity, CV_32F, 1.0 / 16);
-	// 归一化视差映射
-	normalize(disparity, disparity, 0, 256, NORM_MINMAX, -1);
-	return true;
-}
-
-
-
-
-
-
-void chuixianyi::on_planeCalibrate_clicked()
-{
-	//读取相机标定的数据
-	//校正图片
-
-	prepareFrameLR();
-	readRectifyParams();
-
-	//这里就将校正后的frameLeft和frameRight显示在label上了
-	computeDisparityImage(frameLeft, frameRight, img1_rectified, img2_rectified, mapl1, mapl2, mapr1, mapr2, validRoi, disparity);
-	ui.textBrowser->append(QString::fromLocal8Bit("已将左右图像校正!"));
-
-
-	lightPlaneCali(cameraMatrix_L, distCoeffs_L, mapl1, mapl2);
-	lightPlaneCali(cameraMatrix_R, distCoeffs_R, mapr1, mapr2);
-}
-
-void chuixianyi::lightPlaneCali(Mat &cameraMatrix, Mat &distCoeffs, Mat &map1, Mat &map2)
-{
-	
-	
-
-
-}
-
-
-
-void chuixianyi::on_liveShowCoordinate_clicked()
+void chuixianyi::on_liveShowCoordinateBtn_clicked()
 {
 
 }
