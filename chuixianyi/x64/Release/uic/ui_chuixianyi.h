@@ -38,11 +38,15 @@ public:
     QPushButton *saveFrameBtn;
     QPushButton *endCameraBtn;
     QPushButton *calibrateBtn;
+    QPushButton *rayPlaneCalibrateBtn;
+    QPushButton *OpenCVCalibrateBtn;
+    QPushButton *MATLABCalibrateBtn;
+    QPushButton *rayPlaneParamsBtn;
     QPushButton *rectifyBtn;
     QPushButton *measureBtn;
+    QPushButton *measure1Btn;
     QPushButton *autoMatchBtn;
     QPushButton *detectCrossBtn;
-    QPushButton *planeCalibrateBtn;
     QPushButton *liveShowCoordinateBtn;
     QSpacerItem *verticalSpacer;
     QPushButton *exitBtn;
@@ -90,6 +94,26 @@ public:
 
         verticalLayout->addWidget(calibrateBtn);
 
+        rayPlaneCalibrateBtn = new QPushButton(verticalLayoutWidget);
+        rayPlaneCalibrateBtn->setObjectName(QStringLiteral("rayPlaneCalibrateBtn"));
+
+        verticalLayout->addWidget(rayPlaneCalibrateBtn);
+
+        OpenCVCalibrateBtn = new QPushButton(verticalLayoutWidget);
+        OpenCVCalibrateBtn->setObjectName(QStringLiteral("OpenCVCalibrateBtn"));
+
+        verticalLayout->addWidget(OpenCVCalibrateBtn);
+
+        MATLABCalibrateBtn = new QPushButton(verticalLayoutWidget);
+        MATLABCalibrateBtn->setObjectName(QStringLiteral("MATLABCalibrateBtn"));
+
+        verticalLayout->addWidget(MATLABCalibrateBtn);
+
+        rayPlaneParamsBtn = new QPushButton(verticalLayoutWidget);
+        rayPlaneParamsBtn->setObjectName(QStringLiteral("rayPlaneParamsBtn"));
+
+        verticalLayout->addWidget(rayPlaneParamsBtn);
+
         rectifyBtn = new QPushButton(verticalLayoutWidget);
         rectifyBtn->setObjectName(QStringLiteral("rectifyBtn"));
 
@@ -100,6 +124,11 @@ public:
 
         verticalLayout->addWidget(measureBtn);
 
+        measure1Btn = new QPushButton(verticalLayoutWidget);
+        measure1Btn->setObjectName(QStringLiteral("measure1Btn"));
+
+        verticalLayout->addWidget(measure1Btn);
+
         autoMatchBtn = new QPushButton(verticalLayoutWidget);
         autoMatchBtn->setObjectName(QStringLiteral("autoMatchBtn"));
 
@@ -109,11 +138,6 @@ public:
         detectCrossBtn->setObjectName(QStringLiteral("detectCrossBtn"));
 
         verticalLayout->addWidget(detectCrossBtn);
-
-        planeCalibrateBtn = new QPushButton(verticalLayoutWidget);
-        planeCalibrateBtn->setObjectName(QStringLiteral("planeCalibrateBtn"));
-
-        verticalLayout->addWidget(planeCalibrateBtn);
 
         liveShowCoordinateBtn = new QPushButton(verticalLayoutWidget);
         liveShowCoordinateBtn->setObjectName(QStringLiteral("liveShowCoordinateBtn"));
@@ -175,12 +199,16 @@ public:
         startCameraBtn->setText(QApplication::translate("chuixianyiClass", "\345\274\200\345\247\213\346\213\215\346\221\204", Q_NULLPTR));
         saveFrameBtn->setText(QApplication::translate("chuixianyiClass", "\344\277\235\345\255\230\345\275\223\345\211\215\345\270\247", Q_NULLPTR));
         endCameraBtn->setText(QApplication::translate("chuixianyiClass", "\347\273\223\346\235\237\346\213\215\346\221\204", Q_NULLPTR));
-        calibrateBtn->setText(QApplication::translate("chuixianyiClass", "\346\240\207\345\256\232\347\233\270\346\234\272", Q_NULLPTR));
-        rectifyBtn->setText(QApplication::translate("chuixianyiClass", "\346\240\241\346\255\243\345\233\276\345\203\217", Q_NULLPTR));
-        measureBtn->setText(QApplication::translate("chuixianyiClass", "\351\200\211\347\202\271\346\265\213\351\207\217", Q_NULLPTR));
+        calibrateBtn->setText(QApplication::translate("chuixianyiClass", "OpenCV\347\233\270\346\234\272\346\240\207\345\256\232", Q_NULLPTR));
+        rayPlaneCalibrateBtn->setText(QApplication::translate("chuixianyiClass", "\346\277\200\345\205\211\345\271\263\351\235\242\346\240\207\345\256\232", Q_NULLPTR));
+        OpenCVCalibrateBtn->setText(QApplication::translate("chuixianyiClass", "\350\257\273\345\217\226OpenCV\347\233\270\346\234\272\346\240\207\345\256\232\346\225\260\346\215\256", Q_NULLPTR));
+        MATLABCalibrateBtn->setText(QApplication::translate("chuixianyiClass", "\350\257\273\345\217\226MATLAB\347\233\270\346\234\272\346\240\207\345\256\232\346\225\260\346\215\256", Q_NULLPTR));
+        rayPlaneParamsBtn->setText(QApplication::translate("chuixianyiClass", "\350\257\273\345\217\226\346\277\200\345\205\211\345\271\263\351\235\242\346\240\207\345\256\232\346\225\260\346\215\256", Q_NULLPTR));
+        rectifyBtn->setText(QApplication::translate("chuixianyiClass", "\347\253\213\344\275\223\346\240\241\346\255\243\345\233\276\345\203\217", Q_NULLPTR));
+        measureBtn->setText(QApplication::translate("chuixianyiClass", "\345\217\214\347\233\256\350\247\206\350\247\211\351\200\211\347\202\271\346\265\213\351\207\217", Q_NULLPTR));
+        measure1Btn->setText(QApplication::translate("chuixianyiClass", "\346\277\200\345\205\211\344\270\211\350\247\222\346\263\225\351\200\211\347\202\271\346\265\213\351\207\217", Q_NULLPTR));
         autoMatchBtn->setText(QApplication::translate("chuixianyiClass", "\350\207\252\345\212\250\345\214\271\351\205\215", Q_NULLPTR));
         detectCrossBtn->setText(QApplication::translate("chuixianyiClass", "\346\243\200\346\265\213\344\272\244\347\202\271", Q_NULLPTR));
-        planeCalibrateBtn->setText(QApplication::translate("chuixianyiClass", "\345\205\211\345\271\263\351\235\242\346\240\207\345\256\232", Q_NULLPTR));
         liveShowCoordinateBtn->setText(QApplication::translate("chuixianyiClass", "\345\256\236\346\227\266\346\230\276\347\244\272\345\236\202\347\272\277\345\235\220\346\240\207", Q_NULLPTR));
         exitBtn->setText(QApplication::translate("chuixianyiClass", "\351\200\200\345\207\272", Q_NULLPTR));
         labelLeft->setText(QApplication::translate("chuixianyiClass", "\345\267\246\346\221\204\345\203\217\345\244\264", Q_NULLPTR));

@@ -36,9 +36,9 @@
 #include <algorithm>
 #include <numeric>
 
-#define LEFT_FOLDER "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\04\\left\\"
-#define RIGHT_FOLDER "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\04\\right\\"
-#define DATA_FOLDER "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\04\\"
+#define LEFT_FOLDER "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\07\\left\\"
+#define RIGHT_FOLDER "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\07\\right\\"
+#define DATA_FOLDER "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\07\\"
 
 
 using namespace std;
@@ -57,7 +57,6 @@ public:
 
 	QImage CvMat2QImage(const Mat &mat);
 	Mat QImage2CvMat(const QImage &image);
-	void readRectifyParams();
 	void prepareFrameLR();
 
 
@@ -86,13 +85,22 @@ public:
 		Mat& img2_rectified, Mat& mapl1, Mat& mapl2, Mat& mapr1, Mat& mapr2, Rect validRoi[2], Mat& disparity);
 	bool computeDisparityImage(Mat& img1, Mat& img2, Mat& img1_rectified,
 		Mat& img2_rectified, Mat& mapl1, Mat& mapl2, Mat& mapr1, Mat& mapr2, Rect validRoi[2], Mat& disparity);
-	Point3f uv2xyz(Point2f uvLeft, Point2f uvRight);
+	Point3f uv2xwywzw(Point2f uvLeft, Point2f uvRight);
 
 
 
 	//激光平面标定用到的函数
-	vector<Point> getRayLinePoints();
+	bool rayPlaneCalibrate(const char* imageFolder, const char* imageList, const char* rayPlaneCalibrateResult, 
+		const char* realRayPlanePointsList, Mat& rayPlaneParams, Mat& projectionMatrix, Mat& cameraMatrix, Mat& distCoeffs);
+	bool rayPlaneCalibrate(const char* imageFolder, const char* imageList, const char* rayPlaneCalibrateResult,
+		Mat& rayPlaneParams, Mat& projectionMatrix);
+	void getRayLinePoints(Mat& srcImage, vector<Point>& linePoints);
+	void deleteSmallRegions(Mat &pSrc, Mat &pDst);
+	void findSmallRegions(Mat &pSrc, Mat &pDst);
 	Point2f uvzw2xwyw(Point uv, float zw, Mat &P);
+	void uvzw2xwyw(Point &uv, float zw, Point2f &xwyw, Mat &M);
+	Point3f uv2xwywzw(Point uv);
+	void uv2xwywzw(Point &uv, Point3f &xwywzw);
 
 
 
@@ -125,8 +133,8 @@ private:
 
 	//相机标定和测量用到的变量
 private:
-	const char* imageName_L = "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\04\\left\\left02.jpg"; // 用于检测深度的图像
-	const char* imageName_R = "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\04\\right\\right02.jpg";
+	const char* imageName_L = "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\07\\left\\left00_0.jpg"; // 用于检测深度的图像
+	const char* imageName_R = "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\07\\right\\right00_0.jpg";
 	const char* imageList_L = "caliberationpics_L.txt"; // 左相机的标定图片名称列表
 	const char* imageList_R = "caliberationpics_R.txt"; // 右相机的标定图片名称列表
 	const char* singleCalibrate_result_L = "calibrationresults_L.yml"; // 存放左相机的标定结果
@@ -142,17 +150,20 @@ private:
 	Mat cameraMatrix_R = Mat(3, 3, CV_32FC1, Scalar::all(0)); // 初始化相机的内参数
 	Mat distCoeffs_L = Mat(1, 5, CV_32FC1, Scalar::all(0)); // 相机的畸变系数
 	Mat distCoeffs_R = Mat(1, 5, CV_32FC1, Scalar::all(0)); // 初始化相机的畸变系数
-	Mat extrinsicMatrix_L = Mat(3, 4, CV_32FC1, Scalar::all(0)); // 第一张图片标定板对应的世界坐标系的外参数
-	Mat extrinsicMatrix_R = Mat(3, 4, CV_32FC1, Scalar::all(0)); // 初始化相机的外参数
+	Mat rotationVector_L = Mat(3, 1, CV_32FC1, Scalar::all(0)); // 第一张图片标定板对应的世界坐标系的旋转向量
+	Mat rotationVector_R = Mat(3, 1, CV_32FC1, Scalar::all(0));
 	Mat rotationMatrix_L = Mat(3, 3, CV_32FC1, Scalar::all(0)); // 第一张图片标定板对应的世界坐标系的旋转矩阵
 	Mat rotationMatrix_R = Mat(3, 3, CV_32FC1, Scalar::all(0));
-	Mat translationMatrix_L = Mat(3, 1, CV_32FC1, Scalar::all(0)); // 第一张图片标定板对应的世界坐标系的平移矩阵
-	Mat translationMatrix_R = Mat(3, 1, CV_32FC1, Scalar::all(0));
+	Mat translationVector_L = Mat(3, 1, CV_32FC1, Scalar::all(0)); // 第一张图片标定板对应的世界坐标系的平移向量
+	Mat translationVector_R = Mat(3, 1, CV_32FC1, Scalar::all(0));
+	Mat extrinsicMatrix_L = Mat(3, 4, CV_32FC1, Scalar::all(0)); // 第一张图片标定板对应的世界坐标系的外参数
+	Mat extrinsicMatrix_R = Mat(3, 4, CV_32FC1, Scalar::all(0));
 	Mat projectionMatrix_L = Mat(3, 4, CV_32FC1, Scalar::all(0)); // 第一张图片标定板对应的世界坐标系的投影矩阵
 	Mat projectionMatrix_R = Mat(3, 4, CV_32FC1, Scalar::all(0));
 	Mat R, T, E, F; // 立体标定参数
 	Mat R1, R2, P1, P2, Q; // 立体校正参数
-	Mat mapl1, mapl2, mapr1, mapr2; // 图像重投影映射表
+	Mat mapl1, mapl2, mapr1, mapr2; // 图像重投影映射表	立体矫正校正
+	Mat maplx, maply, maprx, mapry; // 图像重投影映射表	左右相机单目矫正
 	Mat img1_rectified, img2_rectified, disparity, result3DImage; // 校正图像 视差图 深度图
 	Size patternSize = Size(17, 17); // 行列内角点个数
 	Size chessboardSize = Size(10, 10); // 棋盘上每个棋盘格的大小10mm
@@ -169,15 +180,20 @@ private:
 
 	//激光平面标定和测量用到的变量
 private:
-	const char* imageList_L_rayLine = "caliberationpics_L_rayLine.txt"; // 左相机激光平面标定的图片名称列表
-	const char* imageList_R_ratLine = "caliberationpics_R_rayLine.txt"; // 右相机激光平面标定的图片名称列表
-	const char* rayLineCalibrate_result_L = "rayLinecalibrationresults_L.yml"; // 存放左相机激光平面的标定结果
-	const char* rayLineCalibrate_result_R = "rayLinecalibrationresults_R.yml"; // 存放右相机激光平面的标定结果
-	Mat srcImage, grayImage, redImage, rayLineImage;
-	int T_rayLine = 50; // 图像二值化的阈值
+	const char* rayLineimageList_L = "rayLinecaliberationpics_L.txt"; // 左相机激光平面标定的图片名称列表
+	const char* rayLineimageList_R = "rayLinecaliberationpics_R.txt"; // 右相机激光平面标定的图片名称列表
+	const char* rayPlaneCalibrate_result_L = "rayPlanecalibrationresults_L.yml"; // 存放左相机激光平面的标定结果
+	const char* rayPlaneCalibrate_result_R = "rayPlanecalibrationresults_R.yml"; // 存放右相机激光平面的标定结果
+	const char* realRayPlanePointsList_L = "rayPlanePoints_L.txt"; // 存放左相机激光平面的点数据
+	const char* realRayPlanePointsList_R = "rayPlanePoints_R.txt"; // 存放右相机激光平面的点数据
+	Mat srcImage, grayImage, redImage, rayLineImage, midImage, maskImage;
+	int T_rayLine = 80; // 图像二值化的阈值
 	int redtolerant = 3, graytolerant = 10;
-	Mat G, L, S;	// S = [A B C]-1		S = (GT * G)-1 * GT * L
-
+	Mat G, L;
+	Mat S = Mat(3, 1, CV_32FC1); // S = [A B C]-1		S = (GT * G)-1 * GT * L
+	Mat rayPlaneParams_L = Mat(3, 1, CV_32FC1);
+	Mat rayPlaneParams_R = Mat(3, 1, CV_32FC1);
+	bool flagIsMeasuring1 = false;
 
 
 	//图像处理部分用到的变量
@@ -187,7 +203,7 @@ private:
 	bool flagIsDetectedCross = false; // 检测激光平面与垂线的交点
 	Mat g_srcImage, g_dstImage, g_midImage, g_grayImage, imgHSVMask, g_redImage;//原始图、中间图和效果图
 	int threshold_value = 20;	//阈值
-	int msize = 100;				//面积因子
+	int msize = 400;				//面积因子
 	float start_time, end_time, sum_time;	//处理时间
 
 
@@ -197,15 +213,24 @@ private slots:
 void on_startCameraBtn_clicked();
 void on_endCameraBtn_clicked();
 void on_saveFrameBtn_clicked();
+void readFrame(); // 用定时器控制读取相机数据的帧率
+
+void on_OpenCVCalibrateBtn_clicked();
+void on_MATLABCalibrateBtn_clicked();
+void on_rayPlaneParamsBtn_clicked();
+
 void on_calibrateBtn_clicked();
 void on_rectifyBtn_clicked();
 void on_measureBtn_clicked();
+
+void on_rayPlaneCalibrateBtn_clicked();
+void on_measure1Btn_clicked();
+
 void on_autoMatchBtn_clicked();
 void on_detectCrossBtn_clicked();
-void on_planeCalibrateBtn_clicked();
 void on_liveShowCoordinateBtn_clicked();
 
-void readFrame(); // 用定时器控制读取相机数据的帧率
+
 
 
 protected:

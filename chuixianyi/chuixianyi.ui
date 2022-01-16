@@ -48,21 +48,56 @@
      <item>
       <widget class="QPushButton" name="calibrateBtn">
        <property name="text">
-        <string>标定相机</string>
+        <string>OpenCV相机标定</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="rayPlaneCalibrateBtn">
+       <property name="text">
+        <string>激光平面标定</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="OpenCVCalibrateBtn">
+       <property name="text">
+        <string>读取OpenCV相机标定数据</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="MATLABCalibrateBtn">
+       <property name="text">
+        <string>读取MATLAB相机标定数据</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="rayPlaneParamsBtn">
+       <property name="text">
+        <string>读取激光平面标定数据</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="rectifyBtn">
        <property name="text">
-        <string>校正图像</string>
+        <string>立体校正图像</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="measureBtn">
        <property name="text">
-        <string>选点测量</string>
+        <string>双目视觉选点测量</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="measure1Btn">
+       <property name="text">
+        <string>激光三角法选点测量</string>
        </property>
       </widget>
      </item>
@@ -77,13 +112,6 @@
       <widget class="QPushButton" name="detectCrossBtn">
        <property name="text">
         <string>检测交点</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="planeCalibrateBtn">
-       <property name="text">
-        <string>光平面标定</string>
        </property>
       </widget>
      </item>
