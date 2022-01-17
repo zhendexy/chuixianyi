@@ -1,0 +1,7 @@
+%YAML:1.0
+---
+rayPlaneParams: !!opencv-matrix
+   rows: 3
+   cols: 1
+   dt: f
+   data: [ 1.00240279e-02, 2.19722482e-04, -4.92943684e-04 ]
