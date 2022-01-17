@@ -36,9 +36,9 @@
 #include <algorithm>
 #include <numeric>
 
-#define LEFT_FOLDER "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\07\\left\\"
-#define RIGHT_FOLDER "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\07\\right\\"
-#define DATA_FOLDER "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\07\\"
+#define LEFT_FOLDER "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\08\\left\\"
+#define RIGHT_FOLDER "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\08\\right\\"
+#define DATA_FOLDER "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\08\\"
 
 
 using namespace std;
@@ -90,17 +90,17 @@ public:
 
 
 	//激光平面标定用到的函数
-	bool rayPlaneCalibrate(const char* imageFolder, const char* imageList, const char* rayPlaneCalibrateResult, 
-		const char* realRayPlanePointsList, Mat& rayPlaneParams, Mat& projectionMatrix, Mat& cameraMatrix, Mat& distCoeffs);
-	bool rayPlaneCalibrate(const char* imageFolder, const char* imageList, const char* rayPlaneCalibrateResult,
-		Mat& rayPlaneParams, Mat& projectionMatrix);
+	//bool rayPlaneCalibrate(const char* imageFolder, const char* imageList, const char* rayPlaneCalibrateResult, 
+	//	const char* realRayPlanePointsList, Mat& rayPlaneParams, Mat& projectionMatrix, Mat& cameraMatrix, Mat& distCoeffs);
+	bool rayPlaneCalibrate(const char* imageFolder, const char* imageList, const char* uvPoints, const char* realPoints, const char* caliPoints,
+		const char* caliErr, const char*rayPlaneCali_result, Mat& rayPlaneParams, Mat& projectionMatrix, Mat& cameraMatrix, Mat& distCoeffs);
 	void getRayLinePoints(Mat& srcImage, vector<Point>& linePoints);
 	void deleteSmallRegions(Mat &pSrc, Mat &pDst);
 	void findSmallRegions(Mat &pSrc, Mat &pDst);
 	Point2f uvzw2xwyw(Point uv, float zw, Mat &P);
 	void uvzw2xwyw(Point &uv, float zw, Point2f &xwyw, Mat &M);
-	Point3f uv2xwywzw(Point uv);
-	void uv2xwywzw(Point &uv, Point3f &xwywzw);
+	Point3f uv2xwywzw(Point uv, Mat& M);
+	void uv2xwywzw(Point &uv, Point3f &xwywzw, Mat& M);
 
 
 
@@ -133,8 +133,8 @@ private:
 
 	//相机标定和测量用到的变量
 private:
-	const char* imageName_L = "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\07\\left\\left00_0.jpg"; // 用于检测深度的图像
-	const char* imageName_R = "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\07\\right\\right00_0.jpg";
+	const char* imageName_L = "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\08\\left\\left01_10.jpg"; // 用于检测深度的图像
+	const char* imageName_R = "C:\\Users\\jzpwh\\Desktop\\xy\\calibrateExperiments\\08\\right\\right00_0.jpg";
 	const char* imageList_L = "caliberationpics_L.txt"; // 左相机的标定图片名称列表
 	const char* imageList_R = "caliberationpics_R.txt"; // 右相机的标定图片名称列表
 	const char* singleCalibrate_result_L = "calibrationresults_L.yml"; // 存放左相机的标定结果
@@ -182,17 +182,21 @@ private:
 private:
 	const char* rayLineimageList_L = "rayLinecaliberationpics_L.txt"; // 左相机激光平面标定的图片名称列表
 	const char* rayLineimageList_R = "rayLinecaliberationpics_R.txt"; // 右相机激光平面标定的图片名称列表
-	const char* rayPlaneCalibrate_result_L = "rayPlanecalibrationresults_L.yml"; // 存放左相机激光平面的标定结果
-	const char* rayPlaneCalibrate_result_R = "rayPlanecalibrationresults_R.yml"; // 存放右相机激光平面的标定结果
-	const char* realRayPlanePointsList_L = "rayPlanePoints_L.txt"; // 存放左相机激光平面的点数据
-	const char* realRayPlanePointsList_R = "rayPlanePoints_R.txt"; // 存放右相机激光平面的点数据
+	const char* uvPoints_L = "uvPoints_L.txt"; // 存放图像上激光光条中心点数据
+	const char* uvPoints_R = "uvPoints_R.txt";
+	const char* realPoints_L = "realPoints_L.txt"; // 存放激光平面特征点数据
+	const char* realPoints_R = "realPoints_R.txt";
+	const char* caliPoints_L = "caliPoints_L.txt"; // 存放根据标定参数计算的激光平面特征点数据
+	const char* caliPoints_R = "caliPoints_R.txt";
+	const char* caliErr_L = "caliErr_L.txt"; // 存放标定误差
+	const char* caliErr_R = "caliErr_R.txt";
+	const char* rayPlaneCali_result_L = "rayPlaneParams_L.yml"; // 存放左相机激光平面的标定结果
+	const char* rayPlaneCali_result_R = "rayPlaneParams_R.yml"; // 存放右相机激光平面的标定结果
+	Mat rayPlaneParams_L = Mat(3, 1, CV_32FC1); // 左右相机的平面标定参数 A B C
+	Mat rayPlaneParams_R = Mat(3, 1, CV_32FC1);
 	Mat srcImage, grayImage, redImage, rayLineImage, midImage, maskImage;
 	int T_rayLine = 80; // 图像二值化的阈值
 	int redtolerant = 3, graytolerant = 10;
-	Mat G, L;
-	Mat S = Mat(3, 1, CV_32FC1); // S = [A B C]-1		S = (GT * G)-1 * GT * L
-	Mat rayPlaneParams_L = Mat(3, 1, CV_32FC1);
-	Mat rayPlaneParams_R = Mat(3, 1, CV_32FC1);
 	bool flagIsMeasuring1 = false;
 
 
